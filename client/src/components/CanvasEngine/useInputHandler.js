@@ -1,21 +1,19 @@
 /**
- * useInputHandler — wires pointer events → StrokeAccumulator → GestureRecogniser → VisualStore.
+ * useInputHandler — wires pointer events → StrokeAccumulator → GestureClassifier → VisualStore.
  *
- * Active mode: 'freehand' (default for Phase 1 — all gestures go through recogniser).
- * On pen-up the stroke is:
- *   1. Passed to the $1 recogniser
- *   2. If confidence ≥ MIN_CONFIDENCE → geometry is derived and element added to store
- *   3. Otherwise → added as a raw freehand path
- *
- * Returns { drawHandlers } — pointer event handlers to spread onto the <svg> element.
- * The activeTool prop controls the active drawing mode.
+ * On pen-up the stroke is classified geometrically:
+ *   - Nearly straight stroke         → arrow
+ *   - Closed path with corners       → boundary rectangle
+ *   - Closed smooth path             → circle
+ *   - Multiple direction reversals   → zigzag (tension)
+ *   - Anything else                  → freehand path
  */
 
 import { useCallback } from 'react'
 import { useStrokeAccumulator } from './useStrokeAccumulator'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createShape, createArrow, ACTIONS } from '../../store/visualStore'
-import recogniser, { MIN_CONFIDENCE } from '../../gestures/gestureTemplates'
+import { classifyGesture } from '../../gestures/gestureClassifier'
 
 // ---------------------------------------------------------------------------
 // Geometry helpers: derive clean element geometry from raw stroke points
@@ -110,12 +108,10 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   const onPointerUp = useCallback((e) => {
     if (e.button !== 0 || !isDrawing) return
     const points = finishStroke()
-    if (points.length < 3) return                 // too short, ignore
+    if (points.length < 3) return
 
-    const result = recogniser.recognise(points)
-    const gestureName = (result && result.confidence >= MIN_CONFIDENCE)
-      ? result.name
-      : 'freehand'
+    const { name: gestureName, debug } = classifyGesture(points)
+    console.debug('[gesture]', gestureName, debug)
 
     const { kind, element } = buildElement(gestureName, points, store.styleState)
     dispatch({
