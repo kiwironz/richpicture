@@ -150,27 +150,30 @@ function drawIcon(svgNS, el) {
 // Renderer component
 // ---------------------------------------------------------------------------
 
-export default function Renderer({ svgRef }) {
+export default function Renderer({ containerRef }) {
   const { store } = useVisualStore()
   const layersRef = useRef({})
 
   useEffect(() => {
-    const svg = svgRef.current
-    if (!svg) return
+    const container = containerRef.current
+    if (!container) return
 
+    // Rough.js needs an svg element — walk up to find it
+    const svg = container.ownerSVGElement ?? container
     const svgNS = 'http://www.w3.org/2000/svg'
     const rc = rough.svg(svg)
 
-    // Ensure layer groups exist (idempotent)
+    // Ensure layer groups exist inside the viewport container (idempotent)
     const layerIds = ['layer-shapes', 'layer-arrows', 'layer-icons', 'layer-texts']
     layerIds.forEach(id => {
-      if (!svg.getElementById(id)) {
+      const existing = container.querySelector(`#${id}`)
+      if (!existing) {
         const g = document.createElementNS(svgNS, 'g')
         g.setAttribute('id', id)
-        svg.appendChild(g)
+        container.appendChild(g)
         layersRef.current[id] = g
       } else {
-        layersRef.current[id] = svg.getElementById(id)
+        layersRef.current[id] = existing
       }
     })
 
@@ -217,7 +220,7 @@ export default function Renderer({ svgRef }) {
       node.setAttribute('data-id', el.id)
       textsLayer.appendChild(node)
     })
-  }, [store.elements, svgRef])
+  }, [store.elements, containerRef])
 
   // Renderer is purely imperative — renders nothing into the React tree
   return null
