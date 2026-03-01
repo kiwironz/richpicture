@@ -54,14 +54,17 @@ export function useViewport() {
     e.preventDefault()
     const delta  = e.deltaY * (e.ctrlKey ? 0.02 : ZOOM_FACTOR)
     const factor = Math.exp(-delta)
+    const rect   = e.currentTarget.getBoundingClientRect()
+    const svgX   = e.clientX - rect.left
+    const svgY   = e.clientY - rect.top
 
     setTransform(t => {
       const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
       const ratio    = newScale / t.scale
       return {
         scale: newScale,
-        x: e.clientX - ratio * (e.clientX - t.x),
-        y: e.clientY - ratio * (e.clientY - t.y),
+        x: svgX - ratio * (svgX - t.x),
+        y: svgY - ratio * (svgY - t.y),
       }
     })
   }, [])
@@ -86,8 +89,9 @@ export function useViewport() {
     const factor = dist / pinchDist.current
     pinchDist.current = dist
 
-    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2
-    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2
+    const rect = e.currentTarget.getBoundingClientRect()
+    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
 
     setTransform(t => {
       const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
