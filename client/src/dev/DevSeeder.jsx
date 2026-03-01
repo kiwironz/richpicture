@@ -16,18 +16,18 @@ export default function DevSeeder() {
     if (seeded.current) return
     seeded.current = true
 
-    // A boundary rectangle representing an organisational system
+    // A rectangle drawn around an organisational system (semantics inferred by LLM, not encoded here)
     dispatch({ type: ACTIONS.ADD_SHAPE, payload: createShape({
-      type: 'boundary',
+      type: 'rectangle',
       x: 80, y: 80, width: 320, height: 200,
       roughness: 2.2,
       stroke: '#1a1a2e',
       fill: '#f5f0e8',
     }) })
 
-    // A circle representing a concept/force
+    // An ellipse representing a concept/force
     dispatch({ type: ACTIONS.ADD_SHAPE, payload: createShape({
-      type: 'circle',
+      type: 'ellipse',
       x: 520, y: 110, width: 130, height: 130,
       roughness: 1.8,
       stroke: '#4a3728',

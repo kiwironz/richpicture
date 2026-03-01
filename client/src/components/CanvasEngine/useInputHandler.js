@@ -3,8 +3,8 @@
  *
  * On pen-up the stroke is classified geometrically:
  *   - Nearly straight stroke         → arrow
- *   - Closed path with corners       → boundary rectangle
- *   - Closed smooth path             → circle
+ *   - Closed path with corners       → rectangle
+ *   - Closed smooth path             → ellipse
  *   - Multiple direction reversals   → zigzag (tension)
  *   - Anything else                  → freehand path
  */
@@ -31,18 +31,18 @@ function buildElement(gestureName, points, styleState) {
   const roughness = styleState?.globalRoughness ?? 1.5
 
   switch (gestureName) {
-    case 'boundary': {
+    case 'rectangle': {
       const r = boundingRect(points)
       return {
         kind:    'shape',
-        element: createShape({ type: 'boundary', ...r, roughness: roughness + 0.4, fill: 'none' }),
+        element: createShape({ type: 'rectangle', ...r, roughness: roughness + 0.4, fill: 'none' }),
       }
     }
-    case 'circle': {
+    case 'ellipse': {
       const r = boundingRect(points)
       return {
         kind:    'shape',
-        element: createShape({ type: 'circle', ...r, roughness }),
+        element: createShape({ type: 'ellipse', ...r, roughness }),
       }
     }
     case 'arrow': {

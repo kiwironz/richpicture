@@ -25,7 +25,7 @@ export function generateId() {
 // ---------------------------------------------------------------------------
 
 export function createShape({
-  type = 'freehand',   // 'freehand' | 'boundary' | 'circle'
+  type = 'freehand',   // 'freehand' | 'rectangle' | 'ellipse'
   points = [],         // array of {x, y} — freehand path or polygon vertices
   x = 0,
   y = 0,

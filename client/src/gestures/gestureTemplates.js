@@ -1,17 +1,12 @@
 /**
- * gestureTemplates.js — Template point sets for the $1 recogniser.
+ * gestureTemplates.js — $1 Unistroke templates (SUPERSEDED).
  *
- * Each template is a representative stroke for a gesture type.
- * Points are normalised to a 250×250 space; the recogniser re-scales
- * and rotates everything anyway, so absolute values don't matter —
- * only the shape of the path matters.
+ * The geometric classifier in gestureClassifier.js is now used instead.
+ * This file is retained for reference and potential future use.
  *
- * Recognised gesture names map directly to VisualStore shape types:
- *   'boundary'  → createShape({ type: 'boundary' })
- *   'circle'    → createShape({ type: 'circle' })
- *   'freehand'  → createShape({ type: 'freehand' })   (fallback)
- *   'arrow'     → createArrow({ type: 'directional' })
- *   'zigzag'    → tension annotation
+ * NOTE: shape type names here are stale — Visual Store uses
+ *   'rectangle' (not 'boundary') and 'ellipse' (not 'circle')
+ * to reflect that the Visual Store is semantically blind.
  */
 
 import { DollarRecogniser } from './dollarN'

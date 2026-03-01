@@ -8,11 +8,11 @@
  * Classification priority (tested in order):
  *   1. zigzag    — ≥ 3 direction reversals along dominant axis
  *   2. arrow     — high linearity ratio (nearly straight line)
- *   3. boundary  — closed path with detectable corners (≥ 3)
- *   4. circle    — closed path with few corners
+ *   3. rectangle — closed path with detectable corners (≥ 3)
+ *   4. ellipse   — closed path with few corners
  *   5. freehand  — fallback
  *
- * Returns: { name: 'boundary'|'circle'|'arrow'|'zigzag'|'freehand', debug: {} }
+ * Returns: { name: 'rectangle'|'ellipse'|'arrow'|'zigzag'|'freehand', debug: {} }
  */
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ function countReversals(pts) {
 // A corner is a point where the stroke direction changes sharply (> threshold°).
 // ---------------------------------------------------------------------------
 
-function countCorners(pts, thresholdDeg = 40) {
+function countCorners(pts, thresholdDeg = 45) {
   if (pts.length < 5) return 0
   const threshold = (thresholdDeg * Math.PI) / 180
 
@@ -110,32 +110,49 @@ export function classifyGesture(pts) {
   const total    = pathLength(pts)
   const direct   = directLength(pts)
   const closure  = closureDistance(pts)
-  const linear   = direct / total          // 1 = perfectly straight, 0 = complex/closed
-  const closed   = closure / total < 0.30  // end within 30% of total path from start
+  const linear        = direct / total
+  const closureRatio  = closure / total
+  // Closed: end returns within 28% of total path length from start.
+  // Generous enough for quick hand-drawn shapes that leave a small gap;
+  // tight enough to exclude open S-curves and spirals.
+  const closed   = closureRatio < 0.28
   const reversals = countReversals(pts)
+  // Count corners on closed shapes only; open paths use linearity instead.
   const corners  = closed ? countCorners(pts) : 0
 
-  const debug = { total: total.toFixed(1), direct: direct.toFixed(1), linear: linear.toFixed(2), closure: (closure / total).toFixed(2), reversals, corners, closed }
+  const debug = {
+    total: total.toFixed(1),
+    direct: direct.toFixed(1),
+    linear: linear.toFixed(2),
+    closureRatio: closureRatio.toFixed(2),
+    reversals,
+    corners,
+    closed,
+  }
 
-  // 1. Zigzag — many direction reversals, not a simple straight line
-  if (reversals >= 3 && linear < 0.9) {
+  // 1. Zigzag — ≥ 3 direction reversals AND not a nearly-straight line.
+  //    linear < 0.75 prevents a slightly wobbly arrow from triggering this.
+  if (reversals >= 3 && linear < 0.75) {
     return { name: 'zigzag', debug }
   }
 
-  // 2. Arrow — nearly straight stroke (high linearity), not closed
-  //    Threshold 0.82: allows gentle curves but excludes S-curves and shapes
-  if (!closed && linear > 0.82) {
+  // 2. Arrow — not closed AND high linearity.
+  //    Threshold 0.88: intentional straight lines score > 0.88 in practice;
+  //    curves and shapes score < 0.80. The 0.80–0.88 gap falls through to freehand.
+  if (!closed && linear > 0.88) {
     return { name: 'arrow', debug }
   }
 
-  // 3. Closed shapes
+  // 3. Closed shapes — distinguish by corner count.
   if (closed) {
-    // Rectangle/boundary: 3+ detectable corners
+    // Rectangle: ≥ 3 sharp corners (covers triangles, quads, irregular polygons).
+    // Using ≥ 3 rather than ≥ 4 because one corner may be smoothed by natural
+    // hand deceleration.
     if (corners >= 3) {
-      return { name: 'boundary', debug }
+      return { name: 'rectangle', debug }
     }
-    // Circle: closed but smooth (few corners)
-    return { name: 'circle', debug }
+    // Ellipse: closed and smooth — few or no detectable corners.
+    return { name: 'ellipse', debug }
   }
 
   // 4. Freehand fallback

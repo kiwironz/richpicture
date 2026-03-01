@@ -46,10 +46,10 @@ function drawShape(rc, svgNS, el) {
   let node
 
   switch (el.type) {
-    case 'boundary':
+    case 'rectangle':
       node = rc.rectangle(el.x, el.y, el.width, el.height, { ...opts, roughness: opts.roughness + 0.3 })
       break
-    case 'circle':
+    case 'ellipse':
       node = rc.ellipse(
         el.x + el.width / 2,
         el.y + el.height / 2,
