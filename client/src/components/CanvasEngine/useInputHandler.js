@@ -1,22 +1,25 @@
 /**
- * useInputHandler — wires pointer events → StrokeAccumulator → GestureClassifier → VisualStore.
+ * useInputHandler — pointer events → VisualStore, driven by the selected tool.
  *
- * On pen-up the stroke is classified geometrically:
- *   - Nearly straight stroke         → arrow
- *   - Closed path with corners       → rectangle
- *   - Closed smooth path             → ellipse
- *   - Multiple direction reversals   → zigzag (tension)
- *   - Anything else                  → freehand path
+ * The active tool determines what element is created on pen-up.
+ * No gesture classification — the user's intent is explicit via the palette.
+ *
+ *   freehand      → shape { type: 'freehand', points }
+ *   rectangle     → shape { type: 'rectangle', ...boundingRect }
+ *   ellipse       → shape { type: 'ellipse',   ...boundingRect }
+ *   line          → arrow { type: 'undirected', start, end }
+ *   arrow         → arrow { type: 'directional', start, end }
+ *   bidirectional → arrow { type: 'bidirectional', start, end }
+ *   select        → no drawing (handled by SelectTool, Phase 1 step 9)
  */
 
 import { useCallback } from 'react'
 import { useStrokeAccumulator } from './useStrokeAccumulator'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createShape, createArrow, ACTIONS } from '../../store/visualStore'
-import { classifyGesture } from '../../gestures/gestureClassifier'
 
 // ---------------------------------------------------------------------------
-// Geometry helpers: derive clean element geometry from raw stroke points
+// Snap helpers
 // ---------------------------------------------------------------------------
 
 function boundingRect(pts) {
@@ -27,56 +30,39 @@ function boundingRect(pts) {
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
-function buildElement(gestureName, points, styleState) {
+function buildElement(tool, points, styleState) {
   const roughness = styleState?.globalRoughness ?? 1.5
 
-  switch (gestureName) {
+  switch (tool) {
     case 'rectangle': {
       const r = boundingRect(points)
-      return {
-        kind:    'shape',
-        element: createShape({ type: 'rectangle', ...r, roughness: roughness + 0.4, fill: 'none' }),
-      }
+      return { kind: 'shape', element: createShape({ type: 'rectangle', ...r, roughness }) }
     }
     case 'ellipse': {
       const r = boundingRect(points)
+      return { kind: 'shape', element: createShape({ type: 'ellipse', ...r, roughness }) }
+    }
+    case 'line': {
       return {
-        kind:    'shape',
-        element: createShape({ type: 'ellipse', ...r, roughness }),
+        kind: 'arrow',
+        element: createArrow({ type: 'undirected', startPoint: points[0], endPoint: points[points.length - 1] }),
       }
     }
     case 'arrow': {
-      // Straight-line gesture in freehand mode → undirected connector.
-      // Directionality is applied by the Arrow tool in the palette (Phase 1 step 8).
       return {
-        kind:    'arrow',
-        element: createArrow({
-          type:       'undirected',
-          startPoint: points[0],
-          endPoint:   points[points.length - 1],
-        }),
+        kind: 'arrow',
+        element: createArrow({ type: 'directional', startPoint: points[0], endPoint: points[points.length - 1] }),
       }
     }
-    case 'zigzag': {
-      // Render as a freehand path with tension styling
+    case 'bidirectional': {
       return {
-        kind:    'shape',
-        element: createShape({
-          type:        'freehand',
-          points,
-          stroke:      '#dc2626',
-          strokeWidth: 2.5,
-          roughness:   roughness + 0.5,
-        }),
+        kind: 'arrow',
+        element: createArrow({ type: 'bidirectional', startPoint: points[0], endPoint: points[points.length - 1] }),
       }
     }
-    default: {
-      // Freehand fallback
-      return {
-        kind:    'shape',
-        element: createShape({ type: 'freehand', points, roughness }),
-      }
-    }
+    case 'freehand':
+    default:
+      return { kind: 'shape', element: createShape({ type: 'freehand', points, roughness }) }
   }
 }
 
@@ -89,17 +75,19 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   const { startStroke, addPoint, finishStroke, cancelStroke, isDrawing, stroke } =
     useStrokeAccumulator()
 
+  // Tools that draw on the canvas (select handled separately later)
+  const isDrawingTool = activeTool !== 'select'
+
   const todiagram = useCallback((e) => {
     const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
     return screenToDiagram(e.clientX - rect.left, e.clientY - rect.top)
   }, [svgRef, screenToDiagram])
 
   const onPointerDown = useCallback((e) => {
-    if (e.button !== 0) return                    // left button only
-    if (activeTool !== 'freehand') return
+    if (e.button !== 0 || !isDrawingTool) return
     e.currentTarget.setPointerCapture(e.pointerId)
     startStroke(todiagram(e))
-  }, [activeTool, startStroke, todiagram])
+  }, [isDrawingTool, startStroke, todiagram])
 
   const onPointerMove = useCallback((e) => {
     if (!isDrawing) return
@@ -109,17 +97,14 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   const onPointerUp = useCallback((e) => {
     if (e.button !== 0 || !isDrawing) return
     const points = finishStroke()
-    if (points.length < 3) return
+    if (points.length < 2) return
 
-    const { name: gestureName, debug } = classifyGesture(points)
-    console.debug('[gesture]', gestureName, debug)
-
-    const { kind, element } = buildElement(gestureName, points, store.styleState)
+    const { kind, element } = buildElement(activeTool, points, store.styleState)
     dispatch({
       type:    kind === 'arrow' ? ACTIONS.ADD_ARROW : ACTIONS.ADD_SHAPE,
       payload: element,
     })
-  }, [isDrawing, finishStroke, dispatch, store.styleState])
+  }, [isDrawing, finishStroke, activeTool, dispatch, store.styleState])
 
   const onPointerCancel = useCallback(() => {
     cancelStroke()
@@ -128,11 +113,6 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   return {
     isDrawing,
     stroke,
-    drawHandlers: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel,
-    },
+    drawHandlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
   }
 }

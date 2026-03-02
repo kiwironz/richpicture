@@ -50,7 +50,7 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
       <svg
         ref={svgRef}
         className="w-full h-full"
-        style={{ touchAction: 'none', cursor: isDrawing ? 'crosshair' : 'crosshair' }}
+        style={{ touchAction: 'none', cursor: activeTool === 'select' ? 'default' : 'crosshair' }}
         {...combinedHandlers}
       >
         <g ref={viewportRef} transform={transformString}>
