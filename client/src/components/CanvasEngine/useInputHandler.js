@@ -18,6 +18,7 @@ import { useCallback, useRef } from 'react'
 import { useStrokeAccumulator } from './useStrokeAccumulator'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createShape, createArrow, ACTIONS } from '../../store/visualStore'
+import { findNearestElement } from './hitTest'
 
 // ---------------------------------------------------------------------------
 // Snap helpers
@@ -31,7 +32,7 @@ function boundingRect(pts) {
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
-function buildElement(tool, points, styleState) {
+function buildElement(tool, points, styleState, elements) {
   const roughness = styleState?.globalRoughness ?? 1.5
   const stroke    = styleState?.defaultStroke   ?? '#1a1a2e'
   const fill      = styleState?.defaultFill     ?? 'none'
@@ -46,11 +47,22 @@ function buildElement(tool, points, styleState) {
       return { kind: 'shape', element: createShape({ type: 'ellipse', ...r, roughness, stroke, fill }) }
     }
     case 'line':
-      return { kind: 'arrow', element: createArrow({ type: 'undirected',    startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
     case 'arrow':
-      return { kind: 'arrow', element: createArrow({ type: 'directional',   startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
-    case 'bidirectional':
-      return { kind: 'arrow', element: createArrow({ type: 'bidirectional', startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
+    case 'bidirectional': {
+      const start  = points[0]
+      const end    = points[points.length - 1]
+      const srcHit = findNearestElement(elements, start.x, start.y)
+      const tgtHit = findNearestElement(elements, end.x,   end.y)
+      const arrowType = tool === 'line' ? 'undirected' : tool === 'bidirectional' ? 'bidirectional' : 'directional'
+      return { kind: 'arrow', element: createArrow({
+        type:      arrowType,
+        startPoint: start,
+        endPoint:   end,
+        stroke,
+        sourceId:  srcHit?.id ?? null,
+        targetId:  tgtHit?.id ?? null,
+      })}
+    }
     case 'freehand':
     default:
       return { kind: 'shape', element: createShape({ type: 'freehand', points, roughness, stroke }) }
@@ -122,12 +134,12 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
     const points = finishStroke()
     if (points.length < 2) return
 
-    const { kind, element } = buildElement(activeTool, points, store.styleState)
+    const { kind, element } = buildElement(activeTool, points, store.styleState, store.elements)
     dispatch({
       type:    kind === 'arrow' ? ACTIONS.ADD_ARROW : ACTIONS.ADD_SHAPE,
       payload: element,
     })
-  }, [activeTool, isDrawing, finishStroke, onTextClick, todiagram, dispatch, store.styleState])
+  }, [activeTool, isDrawing, finishStroke, onTextClick, todiagram, dispatch, store.styleState, store.elements])
 
   const onPointerCancel = useCallback(() => {
     textDownRef.current = null

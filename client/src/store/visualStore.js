@@ -49,6 +49,9 @@ export function createArrow({
   stroke     = '#1a1a2e',
   strokeWidth = 2,
   label = '',
+  // Resolved element IDs — set at creation time by snapping endpoints to nearby elements
+  sourceId = null,       // id of element at the start of the arrow (or null)
+  targetId = null,       // id of element at the end of the arrow (or null)
   // Label typography
   labelFont       = 'Caveat',
   labelFontSize   = 14,
@@ -56,7 +59,7 @@ export function createArrow({
   labelFontStyle  = 'normal',
   labelColor      = '#1a1a2e',
 } = {}) {
-  return { id: generateId(), kind: 'arrow', type, startPoint, endPoint, midPoints, roughness, stroke, strokeWidth, label, labelFont, labelFontSize, labelFontWeight, labelFontStyle, labelColor }
+  return { id: generateId(), kind: 'arrow', type, startPoint, endPoint, midPoints, roughness, stroke, strokeWidth, label, sourceId, targetId, labelFont, labelFontSize, labelFontWeight, labelFontStyle, labelColor }
 }
 
 export function createIcon({
