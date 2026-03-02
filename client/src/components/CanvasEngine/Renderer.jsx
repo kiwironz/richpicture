@@ -137,13 +137,30 @@ function drawText(svgNS, el) {
   return text
 }
 
+function descriptionText(svgNS, el) {
+  if (!el.descriptionVisible || !el.description) return null
+  const t = document.createElementNS(svgNS, 'text')
+  t.setAttribute('x', el.x + (el.width ?? 80) / 2)
+  t.setAttribute('y', el.y + (el.height ?? 80) + 15)
+  t.setAttribute('text-anchor', 'middle')
+  t.setAttribute('font-family', "'Caveat', cursive")
+  t.setAttribute('font-size', '13')
+  t.setAttribute('fill', '#1a1a2e')
+  t.setAttribute('pointer-events', 'none')
+  t.textContent = el.description
+  return t
+}
+
 function drawIcon(rc, svgNS, el) {
+  // Always wrap in a <g> so description text can be appended alongside the graphic.
+  const wrapper = document.createElementNS(svgNS, 'g')
+
   // Rough-path mode: library icons rendered sketchy via rough.js path()
   if (el.renderMode === 'rough' && el.paths?.length) {
-    const g = document.createElementNS(svgNS, 'g')
+    const inner = document.createElementNS(svgNS, 'g')
     const scaleX = (el.width  ?? 80) / (el.viewBoxW ?? 100)
     const scaleY = (el.height ?? 80) / (el.viewBoxH ?? 100)
-    g.setAttribute('transform', `translate(${el.x}, ${el.y}) scale(${scaleX}, ${scaleY})`)
+    inner.setAttribute('transform', `translate(${el.x}, ${el.y}) scale(${scaleX}, ${scaleY})`)
     el.paths.forEach(p => {
       const node = rc.path(p.d, {
         roughness:   el.roughness  ?? 1.5,
@@ -153,20 +170,26 @@ function drawIcon(rc, svgNS, el) {
         fillStyle:   'hachure',
         hachureGap:  8,
       })
-      g.appendChild(node)
+      inner.appendChild(node)
     })
-    return g
+    wrapper.appendChild(inner)
+  } else if (el.src) {
+    // Image mode: plain <image> element (PNG, JPG, SVG data URI)
+    const img = document.createElementNS(svgNS, 'image')
+    img.setAttribute('href', el.src)
+    img.setAttribute('x', el.x)
+    img.setAttribute('y', el.y)
+    img.setAttribute('width',  el.width  ?? 80)
+    img.setAttribute('height', el.height ?? 80)
+    wrapper.appendChild(img)
+  } else {
+    return null
   }
 
-  // Image mode: plain <image> element (PNG, JPG, SVG data URI)
-  if (!el.src) return null
-  const img = document.createElementNS(svgNS, 'image')
-  img.setAttribute('href', el.src)
-  img.setAttribute('x', el.x)
-  img.setAttribute('y', el.y)
-  img.setAttribute('width',  el.width  ?? 80)
-  img.setAttribute('height', el.height ?? 80)
-  return img
+  const desc = descriptionText(svgNS, el)
+  if (desc) wrapper.appendChild(desc)
+
+  return wrapper
 }
 
 // ---------------------------------------------------------------------------

@@ -69,8 +69,11 @@ export function createIcon({
   roughness  = 1.5,
   stroke     = '#1a1a2e',
   strokeWidth = 2,
+  // Semantic description — used by LLM export; optionally rendered on canvas
+  description        = label || '',  // defaults to library icon label if available
+  descriptionVisible = false,        // whether to render it as visible text on canvas
 } = {}) {
-  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType, renderMode, paths, viewBoxW, viewBoxH, roughness, stroke, strokeWidth }
+  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType, renderMode, paths, viewBoxW, viewBoxH, roughness, stroke, strokeWidth, description, descriptionVisible }
 }
 
 export function createGroup({

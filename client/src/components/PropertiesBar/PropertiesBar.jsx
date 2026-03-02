@@ -167,10 +167,12 @@ export default function PropertiesBar({ selectedIds }) {
   const texts         = selected.filter(el => el.kind === 'text')
   const shapes        = selected.filter(el => el.kind === 'shape')
   const arrows        = selected.filter(el => el.kind === 'arrow')
+  const icons         = selected.filter(el => el.kind === 'icon')
   const hasSelection  = selected.length > 0
   const hasText       = texts.length    > 0
   const hasShape      = shapes.length   > 0
   const hasStrokeable = shapes.length > 0 || arrows.length > 0
+  const hasIcon       = icons.length   > 0
 
   // --- Values: selection mode uses element props, default mode uses styleState ---
   const ss = store.styleState
@@ -181,6 +183,12 @@ export default function PropertiesBar({ selectedIds }) {
   const fontSizeVal  = hasText       ? (texts[0]?.fontSize ?? 18)                            : ss.defaultFontSize
   const isBold       = hasText ? texts.every(t => t.fontWeight === 'bold')   : ss.defaultFontWeight === 'bold'
   const isItalic     = hasText ? texts.every(t => t.fontStyle  === 'italic') : ss.defaultFontStyle  === 'italic'
+
+  // Icon description
+  const descVal     = hasIcon
+    ? (icons.every(ic => ic.description === icons[0].description) ? (icons[0].description ?? '') : '')
+    : ''
+  const descVisible = hasIcon && icons.every(ic => ic.descriptionVisible)
 
   // --- Update helpers ---
   function setDefault(key, val) {
@@ -244,6 +252,15 @@ export default function PropertiesBar({ selectedIds }) {
     } else {
       setDefault('defaultFontStyle', isItalic ? 'normal' : 'italic')
     }
+  }
+
+  function setDescription(val) {
+    icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, description: val } }))
+  }
+
+  function toggleDescVisible() {
+    const next = !descVisible
+    icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionVisible: next } }))
   }
 
   const modeLabel = hasSelection ? null : (
@@ -357,6 +374,42 @@ export default function PropertiesBar({ selectedIds }) {
         <Btn onClick={toggleItalic} active={isItalic} title={hasSelection ? 'Italic' : 'Default italic'}>
           <span className="italic w-3 text-center">I</span>
         </Btn>
+      )}
+
+      {/* Icon / image description */}
+      {hasIcon && (
+        <>
+          <Sep />
+          <span className="text-xs text-stone-400 shrink-0">Desc</span>
+          <input
+            type="text"
+            value={descVal}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Add description…"
+            title="Semantic description (exported for LLM reading)"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-2 text-stone-600 w-44 shrink-0"
+          />
+          <Btn
+            onClick={toggleDescVisible}
+            active={descVisible}
+            title={descVisible ? 'Hide description on canvas' : 'Show description on canvas'}
+          >
+            {descVisible
+              ? /* eye-open */
+                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="8" cy="8" rx="6" ry="4" />
+                  <circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none" />
+                </svg>
+              : /* eye-closed */
+                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 8c1.5-3 9.5-3 12 0" />
+                  <line x1="3" y1="11" x2="5" y2="9" />
+                  <line x1="8" y1="12" x2="8" y2="10" />
+                  <line x1="13" y1="11" x2="11" y2="9" />
+                </svg>
+            }
+          </Btn>
+        </>
       )}
     </div>
   )
