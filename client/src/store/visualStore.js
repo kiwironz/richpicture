@@ -65,6 +65,13 @@ export function createIcon({
   return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType }
 }
 
+export function createGroup({
+  memberIds = [],     // ids of member elements
+  label     = '',
+} = {}) {
+  return { id: generateId(), kind: 'group', memberIds, label }
+}
+
 export function createText({
   content    = '',
   x          = 0,
@@ -95,6 +102,7 @@ export function createInitialState() {
       arrows: [],
       icons:  [],
       texts:  [],
+      groups: [],
     },
     styleState: { ...INITIAL_STYLE_STATE },
   }
@@ -121,11 +129,17 @@ export const ACTIONS = {
   ADD_TEXT:    'ADD_TEXT',
   UPDATE_TEXT: 'UPDATE_TEXT',
   DELETE_TEXT: 'DELETE_TEXT',
+  // Groups
+  ADD_GROUP:    'ADD_GROUP',
+  UPDATE_GROUP: 'UPDATE_GROUP',
+  DELETE_GROUP: 'DELETE_GROUP',
+  UNGROUP:      'UNGROUP',      // removes group container, keeps members
   // Style
   SET_STYLE: 'SET_STYLE',
-  // Bulk move / delete (multi-element, one undo step)
-  MOVE_ELEMENTS:   'MOVE_ELEMENTS',    // payload: { ids: string[], dx, dy }
-  DELETE_ELEMENTS: 'DELETE_ELEMENTS',  // payload: string[]  (ids; also removes attached texts)
+  // Bulk move / delete / scale (multi-element, one undo step)
+  MOVE_ELEMENTS:   'MOVE_ELEMENTS',    // payload: { ids: string[], dx, dy } — expands group memberIds
+  DELETE_ELEMENTS: 'DELETE_ELEMENTS',  // payload: string[] — group ids also deletes members
+  SCALE_ELEMENTS:  'SCALE_ELEMENTS',   // payload: { ids, ox, oy, sx, sy } — expands group memberIds
   // Bulk
   LOAD_STORE:  'LOAD_STORE',
   CLEAR_STORE: 'CLEAR_STORE',
@@ -185,6 +199,17 @@ export function visualStoreReducer(state, action) {
     case ACTIONS.DELETE_TEXT:
       return { ...state, elements: { ...elements, texts: remove(elements.texts, action.payload.id) } }
 
+    // --- groups ---
+    case ACTIONS.ADD_GROUP:
+      return { ...state, elements: { ...elements, groups: [...(elements.groups ?? []), action.payload] } }
+    case ACTIONS.UPDATE_GROUP:
+      return { ...state, elements: { ...elements, groups: upsert(elements.groups ?? [], action.payload) } }
+    case ACTIONS.DELETE_GROUP:
+      return { ...state, elements: { ...elements, groups: remove(elements.groups ?? [], action.payload.id) } }
+    case ACTIONS.UNGROUP:
+      // Remove only the group container; members stay untouched
+      return { ...state, elements: { ...elements, groups: (elements.groups ?? []).filter(g => g.id !== action.payload) } }
+
     // --- style ---
     case ACTIONS.SET_STYLE:
       return { ...state, styleState: { ...state.styleState, ...action.payload } }
@@ -192,7 +217,9 @@ export function visualStoreReducer(state, action) {
     // --- move (multi-element, one undo step) ---
     case ACTIONS.MOVE_ELEMENTS: {
       const { ids, dx, dy } = action.payload
+      // Expand group ids to their member ids
       const idSet = new Set(ids)
+      ;(elements.groups ?? []).forEach(g => { if (idSet.has(g.id)) g.memberIds.forEach(mid => idSet.add(mid)) })
       const moveShape = el => {
         if (!idSet.has(el.id)) return el
         if (el.type === 'freehand') return { ...el, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) }
@@ -225,21 +252,73 @@ export function visualStoreReducer(state, action) {
           arrows: elements.arrows.map(moveArrow),
           texts:  elements.texts.map(moveText),
           icons:  elements.icons.map(moveIcon),
+          groups: elements.groups ?? [],  // groups themselves don't have position
         },
       }
     }
 
-    // --- delete (multi-element; also removes child texts) ---
+    // --- delete (multi-element; group ids also delete all members) ---
     case ACTIONS.DELETE_ELEMENTS: {
       const idSet = new Set(action.payload)
+      // Expand group ids → also delete all members
+      ;(elements.groups ?? []).forEach(g => { if (idSet.has(g.id)) g.memberIds.forEach(mid => idSet.add(mid)) })
       return {
         ...state,
         elements: {
           shapes: elements.shapes.filter(el => !idSet.has(el.id)),
           arrows: elements.arrows.filter(el => !idSet.has(el.id)),
           icons:  elements.icons.filter(el =>  !idSet.has(el.id)),
-          // Delete a text if it is directly selected, OR if its parent is being deleted.
           texts:  elements.texts.filter(el => !idSet.has(el.id) && !idSet.has(el.parentId)),
+          // Remove groups that were explicitly deleted, or that have become empty
+          groups: (elements.groups ?? []).filter(g =>
+            !idSet.has(g.id) && g.memberIds.some(mid => !idSet.has(mid))
+          ),
+        },
+      }
+    }
+
+    // --- scale (resize, multi-element, one undo step) ---
+    case ACTIONS.SCALE_ELEMENTS: {
+      const { ids, ox, oy, sx, sy } = action.payload
+      const idSet = new Set(ids)
+      // Expand group ids to their member ids
+      ;(elements.groups ?? []).forEach(g => { if (idSet.has(g.id)) g.memberIds.forEach(mid => idSet.add(mid)) })
+
+      const scalePoint = p => ({ x: ox + (p.x - ox) * sx, y: oy + (p.y - oy) * sy })
+
+      const scaleShape = el => {
+        if (!idSet.has(el.id)) return el
+        if (el.type === 'freehand') return { ...el, points: el.points.map(scalePoint) }
+        const sp = scalePoint({ x: el.x, y: el.y })
+        return { ...el, x: sp.x, y: sp.y, width: Math.max(4, el.width * sx), height: Math.max(4, el.height * sy) }
+      }
+      const scaleArrow = el => {
+        if (!idSet.has(el.id)) return el
+        return {
+          ...el,
+          startPoint: scalePoint(el.startPoint),
+          endPoint:   scalePoint(el.endPoint),
+          midPoints:  el.midPoints.map(scalePoint),
+        }
+      }
+      const scaleText = el => {
+        if (!idSet.has(el.id) && !idSet.has(el.parentId)) return el
+        const sp = scalePoint({ x: el.x, y: el.y })
+        return { ...el, x: sp.x, y: sp.y }
+      }
+      const scaleIcon = el => {
+        if (!idSet.has(el.id)) return el
+        const sp = scalePoint({ x: el.x, y: el.y })
+        return { ...el, x: sp.x, y: sp.y, width: Math.max(8, (el.width ?? 64) * sx), height: Math.max(8, (el.height ?? 64) * sy) }
+      }
+      return {
+        ...state,
+        elements: {
+          shapes: elements.shapes.map(scaleShape),
+          arrows: elements.arrows.map(scaleArrow),
+          texts:  elements.texts.map(scaleText),
+          icons:  elements.icons.map(scaleIcon),
+          groups: elements.groups ?? [],
         },
       }
     }

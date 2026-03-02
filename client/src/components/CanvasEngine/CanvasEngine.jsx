@@ -1,6 +1,6 @@
 // CanvasEngine — Phase 1
 // Hosts: SVG canvas, Renderer (Rough.js), ViewportManager,
-// InputHandler + StrokeAccumulator, SelectTool, TextTool
+// InputHandler + StrokeAccumulator, SelectTool, GroupTool, TextTool
 
 import { useRef, useEffect, useState, useCallback } from 'react'
 import Renderer from './Renderer'
@@ -8,9 +8,9 @@ import { useViewport } from './useViewport'
 import { useInputHandler } from './useInputHandler'
 import { useSelectTool } from './useSelectTool'
 import TextInputOverlay from './TextInputOverlay'
-import { elementBBox, unionBBoxes, findParentShape } from './hitTest'
+import { elementBBox, groupBBox, unionBBoxes, findParentShape } from './hitTest'
 import { useVisualStore } from '../../store/VisualStoreContext'
-import { createText, ACTIONS } from '../../store/visualStore'
+import { createText, createGroup, ACTIONS } from '../../store/visualStore'
 
 export default function CanvasEngine({ activeTool = 'freehand' }) {
   const svgRef      = useRef(null)
@@ -18,7 +18,8 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
 
   const { store, dispatch, undo, redo } = useVisualStore()
 
-  const { transformString, screenToDiagram, handlers: viewportHandlers } = useViewport()
+  const { transform, transformString, screenToDiagram, handlers: viewportHandlers } = useViewport()
+  const viewportScale = transform.scale
   const { onWheel, onTouchMove, ...viewportPointerHandlers } = viewportHandlers
 
   // Non-passive wheel + touchmove
@@ -52,16 +53,24 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
 
   const cancelText = useCallback(() => setTextInput(null), [])
 
-  // ---- Select tool ----
-  const { selectedIds, setSelectedIds, dragOffset, selectHandlers } = useSelectTool({
+  // ---- Group creation callback ----
+  const handleGroupCreated = useCallback((memberIds) => {
+    dispatch({ type: ACTIONS.ADD_GROUP, payload: createGroup({ memberIds }) })
+    // Note: selection of the new group happens via the G-key handler if needed
+  }, [dispatch])
+
+  // ---- Select / Group tool ----
+  const { selectedIds, setSelectedIds, dragOffset, resizePreview, rubberBand, resizeHandles, cursor: selectCursor, selectHandlers } = useSelectTool({
     svgRef,
     screenToDiagram,
     activeTool,
+    viewportScale,
+    onGroupCreated: handleGroupCreated,
   })
 
-  // Clear selection when changing away from select tool
+  // Clear selection when switching away from select/group tools
   useEffect(() => {
-    if (activeTool !== 'select') setSelectedIds(new Set())
+    if (activeTool !== 'select' && activeTool !== 'group') setSelectedIds(new Set())
   }, [activeTool, setSelectedIds])
 
   // ---- Draw tool (input handler) ----
@@ -75,17 +84,11 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
   // ---- Keyboard shortcuts ----
   useEffect(() => {
     function onKeyDown(e) {
-      // Don't hijack shortcuts when a text input overlay is open
       if (textInput) return
-
       const tag = document.activeElement?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
-      if (e.key === 'Escape') {
-        setSelectedIds(new Set())
-        setTextInput(null)
-        return
-      }
+      if (e.key === 'Escape') { setSelectedIds(new Set()); setTextInput(null); return }
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
         e.preventDefault()
@@ -94,15 +97,40 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
         return
       }
 
+      // G — group current multi-selection (select or group tool)
+      if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey) {
+        if ((activeTool === 'select' || activeTool === 'group') && selectedIds.size >= 2) {
+          e.preventDefault()
+          const group = createGroup({ memberIds: [...selectedIds] })
+          dispatch({ type: ACTIONS.ADD_GROUP, payload: group })
+          setSelectedIds(new Set([group.id]))
+        }
+        return
+      }
+
+      // U — ungroup selected group
+      if ((e.key === 'u' || e.key === 'U') && !e.ctrlKey && !e.metaKey) {
+        if (selectedIds.size === 1) {
+          const id    = [...selectedIds][0]
+          const group = (store.elements.groups ?? []).find(g => g.id === id)
+          if (group) {
+            e.preventDefault()
+            dispatch({ type: ACTIONS.UNGROUP, payload: id })
+            setSelectedIds(new Set(group.memberIds))
+          }
+        }
+        return
+      }
+
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'z') { e.preventDefault(); undo() }
         if (e.key === 'y') { e.preventDefault(); redo() }
-        if (e.key === 'Z') { e.preventDefault(); redo() }  // Ctrl+Shift+Z
+        if (e.key === 'Z') { e.preventDefault(); redo() }
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [textInput, selectedIds, dispatch, undo, redo, setSelectedIds])
+  }, [textInput, selectedIds, activeTool, dispatch, undo, redo, setSelectedIds, store.elements.groups])
 
   // ---- Combine pointer handlers ----
   // Viewport pan uses middle-mouse (button 1); draw uses left (button 0);
@@ -119,25 +147,41 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
   const combinedHandlers = combineHandlers(viewportPointerHandlers, drawHandlers, selectHandlers)
 
   // ---- Selection overlay geometry ----
-  // Compute union bounding box of all selected elements (in diagram coords)
+  // Compute union bounding box of all selected elements (handles groups)
   const allElements = [
-    ...store.elements.shapes,
-    ...store.elements.arrows,
-    ...store.elements.texts,
-    ...store.elements.icons,
+    ...(store.elements.shapes ?? []),
+    ...(store.elements.arrows ?? []),
+    ...(store.elements.texts  ?? []),
+    ...(store.elements.icons  ?? []),
+    ...(store.elements.groups ?? []),
   ]
   const selectionBBox = selectedIds.size > 0
-    ? unionBBoxes(allElements.filter(el => selectedIds.has(el.id)).map(elementBBox).filter(Boolean))
+    ? unionBBoxes(
+        allElements
+          .filter(el => selectedIds.has(el.id))
+          .map(el => el.kind === 'group' ? groupBBox(el, store.elements) : elementBBox(el))
+      )
     : null
 
-  const PAD = 6   // padding around selection box in diagram px
+  const PAD  = 6    // selection outline padding in diagram px
+  const isDragging     = dragOffset.dx !== 0 || dragOffset.dy !== 0
+  const HANDLE_DIM_D   = 8  / viewportScale  // handle square size in diagram px
+  const HANDLE_SW_D    = 1.5 / viewportScale  // handle stroke-width in diagram px
+  const SEL_SW_D       = 1.5 / viewportScale
+  const SEL_DASH_D     = `${5 / viewportScale} ${3 / viewportScale}`
+  const RB_SW_D        = 1 / viewportScale
+  const RB_DASH_D      = `${4 / viewportScale} ${3 / viewportScale}`
+
+  const svgCursor = (activeTool === 'select' || activeTool === 'group')
+    ? selectCursor
+    : (activeTool === 'text' ? 'text' : 'crosshair')
 
   return (
     <div className="flex-1 relative overflow-hidden">
       <svg
         ref={svgRef}
         className="w-full h-full"
-        style={{ touchAction: 'none', cursor: activeTool === 'select' ? 'default' : 'crosshair' }}
+        style={{ touchAction: 'none', cursor: svgCursor }}
         {...combinedHandlers}
       >
         <g ref={viewportRef} transform={transformString}>
@@ -155,9 +199,13 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
             />
           )}
 
-          {/* Selection overlay — transforms with drag preview */}
+          {/* Selection overlay — moves with drag preview */}
           {selectionBBox && (
-            <g transform={`translate(${dragOffset.dx}, ${dragOffset.dy})`} style={{ pointerEvents: 'none' }}>
+            <g
+              transform={isDragging ? `translate(${dragOffset.dx}, ${dragOffset.dy})` : undefined}
+              style={{ pointerEvents: 'none' }}
+            >
+              {/* Dashed selection outline */}
               <rect
                 x={selectionBBox.x - PAD}
                 y={selectionBBox.y - PAD}
@@ -165,11 +213,57 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
                 height={selectionBBox.height + PAD * 2}
                 fill="none"
                 stroke="#3b82f6"
-                strokeWidth="1.5"
-                strokeDasharray="5 3"
-                rx="3"
+                strokeWidth={SEL_SW_D}
+                strokeDasharray={SEL_DASH_D}
+                rx={3 / viewportScale}
               />
+              {/* Corner resize handles — hidden while dragging or resizing */}
+              {!isDragging && !resizePreview && resizeHandles.map(h => (
+                <rect
+                  key={h.id}
+                  x={h.x - HANDLE_DIM_D / 2}
+                  y={h.y - HANDLE_DIM_D / 2}
+                  width={HANDLE_DIM_D}
+                  height={HANDLE_DIM_D}
+                  fill="white"
+                  stroke="#3b82f6"
+                  strokeWidth={HANDLE_SW_D}
+                  rx={HANDLE_SW_D}
+                  style={{ pointerEvents: 'all', cursor: h.cursor }}
+                />
+              ))}
             </g>
+          )}
+
+          {/* Resize preview bbox */}
+          {resizePreview && (
+            <rect
+              x={resizePreview.x}
+              y={resizePreview.y}
+              width={resizePreview.width}
+              height={resizePreview.height}
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth={SEL_SW_D}
+              strokeDasharray={SEL_DASH_D}
+              rx={3 / viewportScale}
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
+
+          {/* Rubber-band selection rect */}
+          {rubberBand && (
+            <rect
+              x={Math.min(rubberBand.x1, rubberBand.x2)}
+              y={Math.min(rubberBand.y1, rubberBand.y2)}
+              width={Math.abs(rubberBand.x2 - rubberBand.x1)}
+              height={Math.abs(rubberBand.y2 - rubberBand.y1)}
+              fill="rgba(59, 130, 246, 0.07)"
+              stroke="#3b82f6"
+              strokeWidth={RB_SW_D}
+              strokeDasharray={RB_DASH_D}
+              style={{ pointerEvents: 'none' }}
+            />
           )}
         </g>
       </svg>

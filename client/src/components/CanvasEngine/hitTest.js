@@ -126,10 +126,47 @@ export function elementBBox(el) {
 
 // Returns the smallest bbox enclosing all provided bboxes.
 export function unionBBoxes(bboxes) {
-  if (!bboxes.length) return null
-  const x1 = Math.min(...bboxes.map(b => b.x))
-  const y1 = Math.min(...bboxes.map(b => b.y))
-  const x2 = Math.max(...bboxes.map(b => b.x + b.width))
-  const y2 = Math.max(...bboxes.map(b => b.y + b.height))
+  const valid = bboxes.filter(Boolean)
+  if (!valid.length) return null
+  const x1 = Math.min(...valid.map(b => b.x))
+  const y1 = Math.min(...valid.map(b => b.y))
+  const x2 = Math.max(...valid.map(b => b.x + b.width))
+  const y2 = Math.max(...valid.map(b => b.y + b.height))
   return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
+}
+
+// Bounding box for a group — union of all member element bboxes.
+export function groupBBox(group, elements) {
+  const all = [
+    ...(elements.shapes ?? []),
+    ...(elements.arrows ?? []),
+    ...(elements.texts  ?? []),
+    ...(elements.icons  ?? []),
+  ]
+  return unionBBoxes(
+    group.memberIds.map(id => {
+      const el = all.find(e => e.id === id)
+      return el ? elementBBox(el) : null
+    })
+  )
+}
+
+// Returns ALL element ids whose bbox overlaps the given rect (rubber-band selection).
+// Excludes standalone group containers (groups are found via their members).
+export function elementsWithinRect(elements, rx, ry, rw, rh) {
+  const x1 = Math.min(rx, rx + rw), y1 = Math.min(ry, ry + rh)
+  const x2 = Math.max(rx, rx + rw), y2 = Math.max(ry, ry + rh)
+  const all = [
+    ...(elements.shapes ?? []),
+    ...(elements.arrows ?? []),
+    ...(elements.icons  ?? []),
+    ...(elements.texts  ?? []),
+  ]
+  return all
+    .filter(el => {
+      const b = elementBBox(el)
+      if (!b) return false
+      return b.x < x2 && b.x + b.width > x1 && b.y < y2 && b.y + b.height > y1
+    })
+    .map(el => el.id)
 }

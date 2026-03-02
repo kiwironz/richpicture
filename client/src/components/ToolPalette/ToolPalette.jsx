@@ -11,10 +11,23 @@
 export const TOOLS = [
   {
     id: 'select',
-    label: 'Select',
+    label: 'Select  (S)',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M5 3l14 9-7 1-4 7z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'group',
+    label: 'Group  (G to group, U to ungroup)',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2"  y="2"  width="9"  height="9"  rx="1" strokeDasharray="2.5 1.5" />
+        <rect x="13" y="2"  width="9"  height="9"  rx="1" strokeDasharray="2.5 1.5" />
+        <rect x="2"  y="13" width="9"  height="9"  rx="1" strokeDasharray="2.5 1.5" />
+        <rect x="13" y="13" width="9"  height="9"  rx="1" strokeDasharray="2.5 1.5" />
+        <rect x="1" y="1" width="22" height="22" rx="2" />
       </svg>
     ),
   },
