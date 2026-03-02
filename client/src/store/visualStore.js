@@ -49,8 +49,14 @@ export function createArrow({
   stroke     = '#1a1a2e',
   strokeWidth = 2,
   label = '',
+  // Label typography
+  labelFont       = 'Caveat',
+  labelFontSize   = 14,
+  labelFontWeight = 'normal',
+  labelFontStyle  = 'normal',
+  labelColor      = '#1a1a2e',
 } = {}) {
-  return { id: generateId(), kind: 'arrow', type, startPoint, endPoint, midPoints, roughness, stroke, strokeWidth, label }
+  return { id: generateId(), kind: 'arrow', type, startPoint, endPoint, midPoints, roughness, stroke, strokeWidth, label, labelFont, labelFontSize, labelFontWeight, labelFontStyle, labelColor }
 }
 
 export function createIcon({
@@ -111,6 +117,7 @@ export const INITIAL_STYLE_STATE = {
   globalRoughness: 1.5,
   activePalette: 'default',
   activeFont: 'Caveat',
+  canvasBackground: 'cream',   // 'white' | 'cream' | 'lined' | 'dots' | 'grid'
   // Drawing defaults — applied to newly created elements
   defaultStroke:     '#1a1a2e',
   defaultFill:       'none',

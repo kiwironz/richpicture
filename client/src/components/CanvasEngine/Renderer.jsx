@@ -38,6 +38,132 @@ function arrowOptions(el) {
 }
 
 // ---------------------------------------------------------------------------
+// Arrow label helper
+// ---------------------------------------------------------------------------
+
+function drawArrowLabel(svgNS, el) {
+  if (!el.label) return null
+  const pts = [el.startPoint, ...(el.midPoints ?? []), el.endPoint]
+  const mid = pts.length >= 3
+    ? pts[Math.floor(pts.length / 2)]
+    : { x: (el.startPoint.x + el.endPoint.x) / 2, y: (el.startPoint.y + el.endPoint.y) / 2 }
+  // Perpendicular offset — sit to the left of the direction of travel
+  const dx = el.endPoint.x - el.startPoint.x
+  const dy = el.endPoint.y - el.startPoint.y
+  const len = Math.hypot(dx, dy) || 1
+  const OFFSET = 14
+  const nx = -dy / len
+  const ny =  dx / len
+  const t = document.createElementNS(svgNS, 'text')
+  t.setAttribute('x',                  mid.x + nx * OFFSET)
+  t.setAttribute('y',                  mid.y + ny * OFFSET)
+  t.setAttribute('text-anchor',        'middle')
+  t.setAttribute('dominant-baseline',  'middle')
+  t.setAttribute('font-family',        `'${el.labelFont ?? 'Caveat'}', cursive`)
+  t.setAttribute('font-size',          el.labelFontSize   ?? 14)
+  t.setAttribute('font-weight',        el.labelFontWeight ?? 'normal')
+  t.setAttribute('font-style',         el.labelFontStyle  ?? 'normal')
+  t.setAttribute('fill',               el.labelColor      ?? '#1a1a2e')
+  t.setAttribute('pointer-events',     'none')
+  t.textContent = el.label
+  return t
+}
+
+// ---------------------------------------------------------------------------
+// Canvas background
+// ---------------------------------------------------------------------------
+
+const BG_BASE = { white: '#ffffff', cream: '#fef9ef', lined: '#fef9ef', dots: '#fef9ef', grid: '#fffdf5' }
+const LINE_COLOR = '#cdc4b5'
+const DOT_COLOR  = '#b0a898'
+
+function renderBackground(container, svg, svgNS, background) {
+  const bg = background ?? 'cream'
+
+  let bgGroup = container.querySelector('#layer-background')
+  if (!bgGroup) {
+    bgGroup = document.createElementNS(svgNS, 'g')
+    bgGroup.setAttribute('id', 'layer-background')
+    container.insertBefore(bgGroup, container.firstChild)
+  }
+  bgGroup.innerHTML = ''
+
+  const EXTENT    = 12000
+  const baseColor = BG_BASE[bg] ?? BG_BASE.cream
+  const baseRect  = document.createElementNS(svgNS, 'rect')
+  baseRect.setAttribute('x',      -EXTENT)
+  baseRect.setAttribute('y',      -EXTENT)
+  baseRect.setAttribute('width',   EXTENT * 2)
+  baseRect.setAttribute('height',  EXTENT * 2)
+
+  if (bg === 'white' || bg === 'cream') {
+    baseRect.setAttribute('fill', baseColor)
+    bgGroup.appendChild(baseRect)
+    return
+  }
+
+  // Pattern-based backgrounds — define pattern in a shared <defs> on the SVG root
+  let svgDefs = svg.querySelector('defs#rp-defs')
+  if (!svgDefs) {
+    svgDefs = document.createElementNS(svgNS, 'defs')
+    svgDefs.setAttribute('id', 'rp-defs')
+    svg.insertBefore(svgDefs, svg.firstChild)
+  }
+  svgDefs.querySelector('#rp-bg-pattern')?.remove()
+
+  const pat = document.createElementNS(svgNS, 'pattern')
+  pat.setAttribute('id',           'rp-bg-pattern')
+  pat.setAttribute('patternUnits', 'userSpaceOnUse')
+
+  function tile(S) {
+    const r = document.createElementNS(svgNS, 'rect')
+    r.setAttribute('width', S); r.setAttribute('height', S)
+    r.setAttribute('fill', baseColor)
+    pat.appendChild(r)
+    return r
+  }
+  function hline(S, color, width) {
+    const l = document.createElementNS(svgNS, 'line')
+    l.setAttribute('x1', 0); l.setAttribute('y1', S)
+    l.setAttribute('x2', S); l.setAttribute('y2', S)
+    l.setAttribute('stroke', color); l.setAttribute('stroke-width', width)
+    pat.appendChild(l)
+  }
+  function vline(S, color, width) {
+    const l = document.createElementNS(svgNS, 'line')
+    l.setAttribute('x1', S); l.setAttribute('y1', 0)
+    l.setAttribute('x2', S); l.setAttribute('y2', S)
+    l.setAttribute('stroke', color); l.setAttribute('stroke-width', width)
+    pat.appendChild(l)
+  }
+
+  if (bg === 'lined') {
+    const S = 28
+    pat.setAttribute('width', S); pat.setAttribute('height', S)
+    tile(S)
+    hline(S - 0.5, LINE_COLOR, '0.7')
+  } else if (bg === 'dots') {
+    const S = 24
+    pat.setAttribute('width', S); pat.setAttribute('height', S)
+    tile(S)
+    const dot = document.createElementNS(svgNS, 'circle')
+    dot.setAttribute('cx', S / 2); dot.setAttribute('cy', S / 2); dot.setAttribute('r', '1.3')
+    dot.setAttribute('fill', DOT_COLOR)
+    pat.appendChild(dot)
+  } else if (bg === 'grid') {
+    const S = 28
+    pat.setAttribute('width', S); pat.setAttribute('height', S)
+    tile(S)
+    hline(S, LINE_COLOR, '0.6')
+    vline(S, LINE_COLOR, '0.6')
+  }
+
+  svgDefs.appendChild(pat)
+  baseRect.setAttribute('fill', 'url(#rp-bg-pattern)')
+  bgGroup.appendChild(baseRect)
+}
+
+// ---------------------------------------------------------------------------
 // Per-element draw helpers
 // ---------------------------------------------------------------------------
 
@@ -226,10 +352,10 @@ export default function Renderer({ containerRef }) {
     })
 
     const { shapes, arrows, icons, texts } = store.elements
+    const background = store.styleState?.canvasBackground
 
-    // --- Shapes ---
-    const shapesLayer = layersRef.current['layer-shapes']
-    shapesLayer.innerHTML = ''
+    // --- Background ---
+    renderBackground(container, svg, svgNS, background)
     shapes.forEach(el => {
       const node = drawShape(rc, svgNS, el)
       if (node) {
@@ -246,6 +372,8 @@ export default function Renderer({ containerRef }) {
       const g = document.createElementNS(svgNS, 'g')
       g.setAttribute('data-id', el.id)
       nodes.filter(Boolean).forEach(n => g.appendChild(n))
+      const labelNode = drawArrowLabel(svgNS, el)
+      if (labelNode) g.appendChild(labelNode)
       arrowsLayer.appendChild(g)
     })
 
@@ -268,7 +396,7 @@ export default function Renderer({ containerRef }) {
       node.setAttribute('data-id', el.id)
       textsLayer.appendChild(node)
     })
-  }, [store.elements, containerRef])
+  }, [store.elements, store.styleState, containerRef])
 
   // Renderer is purely imperative — renders nothing into the React tree
   return null

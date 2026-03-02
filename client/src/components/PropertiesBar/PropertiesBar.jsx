@@ -171,6 +171,7 @@ export default function PropertiesBar({ selectedIds }) {
   const hasSelection  = selected.length > 0
   const hasText       = texts.length    > 0
   const hasShape      = shapes.length   > 0
+  const hasArrow      = arrows.length   > 0
   const hasStrokeable = shapes.length > 0 || arrows.length > 0
   const hasIcon       = icons.length   > 0
 
@@ -195,6 +196,14 @@ export default function PropertiesBar({ selectedIds }) {
   const descIsBold       = hasIcon && icons.every(ic => (ic.descriptionFontWeight ?? 'normal') === 'bold')
   const descIsItalic     = hasIcon && icons.every(ic => (ic.descriptionFontStyle  ?? 'normal') === 'italic')
   const descColorVal     = hasIcon ? (icons[0].descriptionColor ?? '#1a1a2e') : '#1a1a2e'
+
+  // Arrow label
+  const arrowLabelVal      = hasArrow ? (arrows.every(a => a.label === arrows[0].label) ? (arrows[0].label ?? '') : '') : ''
+  const arrowLabelFont     = hasArrow ? (arrows[0].labelFont       ?? 'Caveat')  : 'Caveat'
+  const arrowLabelSize     = hasArrow ? (arrows[0].labelFontSize   ?? 14)        : 14
+  const arrowLabelColor    = hasArrow ? (arrows[0].labelColor      ?? '#1a1a2e') : '#1a1a2e'
+  const arrowLabelIsBold   = hasArrow && arrows.every(a => (a.labelFontWeight ?? 'normal') === 'bold')
+  const arrowLabelIsItalic = hasArrow && arrows.every(a => (a.labelFontStyle  ?? 'normal') === 'italic')
 
   // --- Update helpers ---
   function setDefault(key, val) {
@@ -275,6 +284,13 @@ export default function PropertiesBar({ selectedIds }) {
   function toggleDescBold()       { const next = descIsBold ? 'normal' : 'bold';   icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFontWeight: next } })) }
   function toggleDescItalic()     { const next = descIsItalic ? 'normal' : 'italic'; icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFontStyle: next } })) }
 
+  function setArrowLabel(val)        { arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, label: val } })) }
+  function setArrowLabelFont(font)   { arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFont: font } })) }
+  function setArrowLabelSize(size)   { arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFontSize: Number(size) } })) }
+  function setArrowLabelColor(color) { arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelColor: color } })) }
+  function toggleArrowLabelBold()    { const next = arrowLabelIsBold   ? 'normal' : 'bold';   arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFontWeight: next } })) }
+  function toggleArrowLabelItalic()  { const next = arrowLabelIsItalic ? 'normal' : 'italic'; arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFontStyle:  next } })) }
+
   const modeLabel = hasSelection ? null : (
     <span className="text-xs text-stone-400 italic shrink-0">defaults</span>
   )
@@ -324,6 +340,22 @@ export default function PropertiesBar({ selectedIds }) {
           <polyline points="15,4 13,7 10,5" />
         </svg>
       </Btn>
+
+      <Sep />
+
+      {/* Canvas background */}
+      <select
+        value={ss.canvasBackground ?? 'cream'}
+        onChange={e => dispatch({ type: ACTIONS.SET_STYLE, payload: { canvasBackground: e.target.value } })}
+        title="Canvas background"
+        className="h-7 text-xs bg-stone-50 border border-stone-200 rounded px-1 text-stone-500 shrink-0"
+      >
+        <option value="white">White</option>
+        <option value="cream">Cream</option>
+        <option value="lined">Lined</option>
+        <option value="dots">Dots</option>
+        <option value="grid">Grid</option>
+      </select>
 
       <Sep />
 
@@ -386,6 +418,44 @@ export default function PropertiesBar({ selectedIds }) {
         <Btn onClick={toggleItalic} active={isItalic} title={hasSelection ? 'Italic' : 'Default italic'}>
           <span className="italic w-3 text-center">I</span>
         </Btn>
+      )}
+
+      {/* Arrow label */}
+      {hasArrow && (
+        <>
+          <Sep />
+          <span className="text-xs text-stone-400 shrink-0">Label</span>
+          <input
+            type="text"
+            value={arrowLabelVal}
+            onChange={e => setArrowLabel(e.target.value)}
+            placeholder="Add label…"
+            title="Arrow / line label"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-2 text-stone-600 w-32 shrink-0"
+          />
+          <ColorSwatch value={arrowLabelColor} onChange={setArrowLabelColor} title="Label colour" />
+          <select
+            value={arrowLabelFont}
+            onChange={e => setArrowLabelFont(e.target.value)}
+            title="Label font"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 shrink-0"
+            style={{ fontFamily: `'${arrowLabelFont}', cursive`, maxWidth: 130 }}
+          >
+            {FONTS.map(f => (
+              <option key={f} value={f} style={{ fontFamily: `'${f}', cursive` }}>{f}</option>
+            ))}
+          </select>
+          <select
+            value={arrowLabelSize}
+            onChange={e => setArrowLabelSize(e.target.value)}
+            title="Label font size"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 w-14 shrink-0"
+          >
+            {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <Btn onClick={toggleArrowLabelBold}   active={arrowLabelIsBold}   title="Label bold"><span className="font-bold w-3 text-center">B</span></Btn>
+          <Btn onClick={toggleArrowLabelItalic} active={arrowLabelIsItalic} title="Label italic"><span className="italic w-3 text-center">I</span></Btn>
+        </>
       )}
 
       {/* Icon / image description */}

@@ -46,7 +46,7 @@ export const ICON_LIBRARY = [
     label:    'Organisation',
     category: 'Actors',
     paths: [
-      { d: 'M5,40 L50,8 L95,40' },        // roof
+      { d: 'M5,40 L50,8 L95,40' },          // roof
       { d: 'M10,40 L10,94 M90,40 L90,94' }, // walls
       { d: 'M10,94 L90,94' },               // floor
       { d: 'M40,94 L40,70 L60,70 L60,94' }, // door
@@ -62,6 +62,16 @@ export const ICON_LIBRARY = [
       { d: 'M35,28 A14,14 0 1,0 63,28 A14,14 0 1,0 35,28' }, // head
       { d: 'M49,42 L49,72 M28,56 L70,56 M49,72 L33,92 M49,72 L65,92' }, // body
       { d: 'M10,10 L90,10 L90,95 L10,95 Z' }, // box
+    ],
+  },
+  {
+    id:       'external',
+    label:    'External',
+    category: 'Actors',
+    paths: [
+      { d: 'M38,26 A12,12 0 1,0 62,26 A12,12 0 1,0 38,26' }, // head
+      { d: 'M50,38 L50,70 M28,54 L72,54 M50,70 L34,92 M50,70 L66,92' }, // body
+      { d: 'M6,6 L94,6 L94,94 L6,94 Z', strokeWidth: 1.2 }, // external frame
     ],
   },
 
@@ -106,6 +116,48 @@ export const ICON_LIBRARY = [
       { d: 'M25,75 Q8,75 8,60 Q8,44 22,40 Q20,18 40,18 Q46,6 62,10 Q74,4 82,16 Q96,14 96,30 Q108,32 104,50 Q106,68 90,70 Q86,80 74,76 Q68,88 54,82 Q44,90 34,82 Q20,84 25,75 Z' },
     ],
   },
+  {
+    id:       'server',
+    label:    'Server',
+    category: 'Systems',
+    paths: [
+      { d: 'M8,8 L92,8 L92,40 L8,40 Z' },   // rack 1
+      { d: 'M8,46 L92,46 L92,78 L8,78 Z' },  // rack 2
+      { d: 'M74,22 A6,6 0 1,0 86,22 A6,6 0 1,0 74,22' }, // LED 1
+      { d: 'M74,60 A6,6 0 1,0 86,60 A6,6 0 1,0 74,60' }, // LED 2
+      { d: 'M18,22 L58,22 M18,60 L58,60' },  // front detail
+    ],
+  },
+  {
+    id:       'mobile',
+    label:    'Mobile',
+    category: 'Systems',
+    paths: [
+      { d: 'M28,4 L72,4 L72,96 L28,96 Z' },  // body
+      { d: 'M28,20 L72,20 M28,78 L72,78' },   // bezels
+      { d: 'M44,88 A6,5 0 1,0 56,88 A6,5 0 1,0 44,88' }, // home button
+      { d: 'M44,11 L56,11' },                  // speaker
+    ],
+  },
+  {
+    id:       'document',
+    label:    'Document',
+    category: 'Systems',
+    paths: [
+      { d: 'M15,5 L73,5 L85,17 L85,95 L15,95 Z' }, // body
+      { d: 'M73,5 L73,17 L85,17' },                 // folded corner
+      { d: 'M26,35 L74,35 M26,50 L74,50 M26,65 L62,65' }, // content lines
+    ],
+  },
+  {
+    id:       'service',
+    label:    'Service',
+    category: 'Systems',
+    paths: [
+      { d: 'M50,6 L88,27 L88,73 L50,94 L12,73 L12,27 Z' }, // outer hex
+      { d: 'M50,30 L69,41 L69,63 L50,74 L31,63 L31,41 Z' }, // inner hex
+    ],
+  },
 
   // ── Communication ─────────────────────────────────────────────────────────
   {
@@ -121,12 +173,35 @@ export const ICON_LIBRARY = [
     label:    'Thought',
     category: 'Communication',
     paths: [
-      // cloud-shape thought bubble
       { d: 'M22,72 Q8,72 8,58 Q8,44 20,40 Q18,22 36,20 Q42,8 58,12 Q70,6 78,18 Q92,16 92,32 Q104,34 100,50 Q102,66 88,68 Q84,78 72,74 Q66,84 54,80 Q44,86 36,80 Q24,82 22,72 Z' },
-      // tail circles
       { d: 'M28,82 A4,4 0 1,0 36,82 A4,4 0 1,0 28,82' },
       { d: 'M22,90 A3,3 0 1,0 28,90 A3,3 0 1,0 22,90' },
       { d: 'M18,96 A2,2 0 1,0 22,96 A2,2 0 1,0 18,96' },
+    ],
+  },
+  {
+    id:       'email',
+    label:    'Email',
+    category: 'Communication',
+    paths: [
+      { d: 'M8,22 L92,22 L92,78 L8,78 Z' },  // envelope body
+      { d: 'M8,22 L50,54 L92,22' },           // V fold
+    ],
+  },
+  {
+    id:       'meeting',
+    label:    'Meeting',
+    category: 'Communication',
+    paths: [
+      { d: 'M24,40 L76,40 L76,66 L24,66 Z' }, // table
+      // top person
+      { d: 'M42,8 A8,8 0 1,0 58,8 A8,8 0 1,0 42,8 M50,16 L50,40' },
+      // left person
+      { d: 'M4,46 A7,7 0 1,0 18,46 A7,7 0 1,0 4,46 M11,53 L24,52' },
+      // right person
+      { d: 'M82,46 A7,7 0 1,0 96,46 A7,7 0 1,0 82,46 M89,53 L76,52' },
+      // bottom person
+      { d: 'M42,86 A8,8 0 1,0 58,86 A8,8 0 1,0 42,86 M50,66 L50,78' },
     ],
   },
 
@@ -171,6 +246,36 @@ export const ICON_LIBRARY = [
     category: 'Issues',
     paths: [
       { d: 'M50,82 Q14,58 14,38 A22,22 0 0,1 50,22 A22,22 0 0,1 86,38 Q86,58 50,82 Z' },
+    ],
+  },
+  {
+    id:       'warning',
+    label:    'Warning',
+    category: 'Issues',
+    paths: [
+      { d: 'M50,8 L94,90 L6,90 Z' },                          // triangle
+      { d: 'M50,38 L50,65' },                               // ! bar
+      { d: 'M44,76 A6,6 0 1,0 56,76 A6,6 0 1,0 44,76' },  // ! dot
+    ],
+  },
+  {
+    id:       'clock',
+    label:    'Deadline',
+    category: 'Issues',
+    paths: [
+      { d: 'M50,8 A42,42 0 0,1 50,92 A42,42 0 0,1 50,8 Z' }, // face
+      { d: 'M50,50 L50,22 M50,50 L74,50' },                   // hands
+      { d: 'M48,50 A2,2 0 1,0 52,50 A2,2 0 1,0 48,50' },     // centre dot
+    ],
+  },
+  {
+    id:       'lock',
+    label:    'Constraint',
+    category: 'Issues',
+    paths: [
+      { d: 'M30,46 L30,28 Q30,8 50,8 Q70,8 70,28 L70,46' },  // shackle
+      { d: 'M12,44 L88,44 L88,94 L12,94 Z' },                 // body
+      { d: 'M44,64 A6,6 0 1,0 56,64 A6,6 0 1,0 44,64 M50,70 L50,82' }, // keyhole
     ],
   },
   {
