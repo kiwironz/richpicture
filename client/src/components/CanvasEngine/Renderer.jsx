@@ -44,29 +44,60 @@ function arrowOptions(el) {
 function drawArrowLabel(svgNS, el) {
   if (!el.label) return null
   const pts = [el.startPoint, ...(el.midPoints ?? []), el.endPoint]
-  const mid = pts.length >= 3
-    ? pts[Math.floor(pts.length / 2)]
-    : { x: (el.startPoint.x + el.endPoint.x) / 2, y: (el.startPoint.y + el.endPoint.y) / 2 }
-  // Perpendicular offset — sit to the left of the direction of travel
-  const dx = el.endPoint.x - el.startPoint.x
-  const dy = el.endPoint.y - el.startPoint.y
+
+  // Midpoint position — average of centre two points or middle point
+  const midIdx = Math.floor((pts.length - 1) / 2)
+  const mid = pts.length % 2 === 1
+    ? pts[midIdx + 1]
+    : { x: (pts[midIdx].x + pts[midIdx + 1].x) / 2, y: (pts[midIdx].y + pts[midIdx + 1].y) / 2 }
+
+  // Perpendicular direction using the segment at the midpoint
+  const segA = pts[midIdx]
+  const segB = pts[Math.min(midIdx + 1, pts.length - 1)]
+  const dx = segB.x - segA.x
+  const dy = segB.y - segA.y
   const len = Math.hypot(dx, dy) || 1
-  const OFFSET = 14
-  const nx = -dy / len
-  const ny =  dx / len
+  // Two candidate perpendiculars — pick the one pointing more "up" in SVG (lower Y)
+  const nx1 = -dy / len, ny1 =  dx / len
+  const nx2 =  dy / len, ny2 = -dx / len
+  const [nx, ny] = ny1 <= ny2 ? [nx1, ny1] : [nx2, ny2]
+
+  const OFFSET   = 16
+  const fontSize = el.labelFontSize ?? 14
+  const tx = mid.x + nx * OFFSET
+  const ty = mid.y + ny * OFFSET
+
+  // Rough estimated width for the background pill
+  const estW = el.label.length * (fontSize * 0.56)
+  const padX = 5, padY = 2
+
+  const g = document.createElementNS(svgNS, 'g')
+  g.setAttribute('pointer-events', 'none')
+
+  const bg = document.createElementNS(svgNS, 'rect')
+  bg.setAttribute('x',      tx - estW / 2 - padX)
+  bg.setAttribute('y',      ty - fontSize / 2 - padY)
+  bg.setAttribute('width',  estW + padX * 2)
+  bg.setAttribute('height', fontSize + padY * 2)
+  bg.setAttribute('fill',   'rgba(255,255,255,0.82)')
+  bg.setAttribute('rx',     '3')
+  g.appendChild(bg)
+
   const t = document.createElementNS(svgNS, 'text')
-  t.setAttribute('x',                  mid.x + nx * OFFSET)
-  t.setAttribute('y',                  mid.y + ny * OFFSET)
-  t.setAttribute('text-anchor',        'middle')
-  t.setAttribute('dominant-baseline',  'middle')
-  t.setAttribute('font-family',        `'${el.labelFont ?? 'Caveat'}', cursive`)
-  t.setAttribute('font-size',          el.labelFontSize   ?? 14)
-  t.setAttribute('font-weight',        el.labelFontWeight ?? 'normal')
-  t.setAttribute('font-style',         el.labelFontStyle  ?? 'normal')
-  t.setAttribute('fill',               el.labelColor      ?? '#1a1a2e')
-  t.setAttribute('pointer-events',     'none')
+  t.setAttribute('x',                 tx)
+  t.setAttribute('y',                 ty)
+  t.setAttribute('text-anchor',       'middle')
+  t.setAttribute('dominant-baseline', 'middle')
+  t.setAttribute('font-family',       `'${el.labelFont ?? 'Caveat'}', cursive`)
+  t.setAttribute('font-size',         fontSize)
+  t.setAttribute('font-weight',       el.labelFontWeight ?? 'normal')
+  t.setAttribute('font-style',        el.labelFontStyle  ?? 'normal')
+  t.setAttribute('fill',              el.labelColor      ?? '#1a1a2e')
+  t.setAttribute('pointer-events',    'none')
   t.textContent = el.label
-  return t
+  g.appendChild(t)
+
+  return g
 }
 
 // ---------------------------------------------------------------------------

@@ -89,7 +89,33 @@ export default function CanvasEngine({
   }, [])
 
   const commitText = useCallback((content) => {
-    const { diagramPos } = textInput
+    const { diagramPos, editingId, editingKind } = textInput ?? {}
+
+    if (editingId) {
+      // Editing an existing element's text
+      switch (editingKind) {
+        case 'text': {
+          const el = (store.elements.texts ?? []).find(t => t.id === editingId)
+          if (el) dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, content } })
+          break
+        }
+        case 'arrow': {
+          const el = (store.elements.arrows ?? []).find(a => a.id === editingId)
+          if (el) dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...el, label: content } })
+          break
+        }
+        case 'icon': {
+          const el = (store.elements.icons ?? []).find(i => i.id === editingId)
+          if (el) dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...el, description: content, descriptionVisible: true } })
+          break
+        }
+        default: break
+      }
+      setTextInput(null)
+      return
+    }
+
+    // Creating a new text element (text tool)
     const parentId = findParentShape(store.elements, diagramPos.x, diagramPos.y)
     const ss = store.styleState
     dispatch({
@@ -110,6 +136,37 @@ export default function CanvasEngine({
   }, [textInput, store.elements, store.styleState, dispatch])
 
   const cancelText = useCallback(() => setTextInput(null), [])
+
+  // Double-click on any canvas element → edit its text/label/description
+  const handleDblClick = useCallback((e) => {
+    let node = e.target
+    let dataId = null
+    while (node && node !== svgRef.current) {
+      const id = node.getAttribute?.('data-id')
+      if (id) { dataId = id; break }
+      node = node.parentElement
+    }
+    if (!dataId) return  // empty canvas — text tool single-click handles new text
+
+    const rect = svgRef.current.getBoundingClientRect()
+    const screenPos  = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    const diagramPos = screenToDiagram(screenPos.x, screenPos.y)
+
+    const textEl = (store.elements.texts  ?? []).find(t => t.id === dataId)
+    if (textEl) {
+      setTextInput({ screenPos, diagramPos, editingId: dataId, editingKind: 'text',  currentValue: textEl.content })
+      return
+    }
+    const arrowEl = (store.elements.arrows ?? []).find(a => a.id === dataId)
+    if (arrowEl) {
+      setTextInput({ screenPos, diagramPos, editingId: dataId, editingKind: 'arrow', currentValue: arrowEl.label ?? '' })
+      return
+    }
+    const iconEl = (store.elements.icons ?? []).find(i => i.id === dataId)
+    if (iconEl) {
+      setTextInput({ screenPos, diagramPos, editingId: dataId, editingKind: 'icon',  currentValue: iconEl.description ?? '' })
+    }
+  }, [svgRef, screenToDiagram, store.elements])
 
   // ---- Image drop & paste ----
   const placeImageFile = useCallback((file, dropPos) => {
@@ -315,6 +372,20 @@ export default function CanvasEngine({
   const RB_SW_D        = 1 / viewportScale
   const RB_DASH_D      = `${4 / viewportScale} ${3 / viewportScale}`
 
+  // Font info for the text editing overlay — matches the element being edited
+  let overlayFont     = store.styleState.defaultFont     ?? 'Caveat'
+  let overlayFontSize = store.styleState.defaultFontSize ?? 18
+  if (textInput?.editingKind === 'text') {
+    const el = (store.elements.texts  ?? []).find(t => t.id === textInput.editingId)
+    if (el) { overlayFont = el.font;            overlayFontSize = el.fontSize }
+  } else if (textInput?.editingKind === 'arrow') {
+    const el = (store.elements.arrows ?? []).find(a => a.id === textInput.editingId)
+    if (el) { overlayFont = el.labelFont;        overlayFontSize = el.labelFontSize }
+  } else if (textInput?.editingKind === 'icon') {
+    const el = (store.elements.icons  ?? []).find(i => i.id === textInput.editingId)
+    if (el) { overlayFont = el.descriptionFont; overlayFontSize = el.descriptionFontSize }
+  }
+
   const svgCursor = activeTool === 'place-icon'
     ? 'cell'
     : (activeTool === 'select' || activeTool === 'group')
@@ -332,6 +403,7 @@ export default function CanvasEngine({
         style={{ touchAction: 'none', cursor: svgCursor }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onDoubleClick={handleDblClick}
         {...(activeTool === 'place-icon' ? placeHandlers : combinedHandlers)}
       >
         <g ref={viewportRef} transform={transformString}>
@@ -451,8 +523,9 @@ export default function CanvasEngine({
           screenPos={textInput.screenPos}
           onCommit={commitText}
           onCancel={cancelText}
-          font={store.styleState.defaultFont ?? 'Caveat'}
-          fontSize={store.styleState.defaultFontSize ?? 18}
+          font={overlayFont}
+          fontSize={overlayFontSize}
+          initialValue={textInput.currentValue ?? ''}
         />
       )}
 

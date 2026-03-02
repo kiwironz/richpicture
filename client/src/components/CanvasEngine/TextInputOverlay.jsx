@@ -12,7 +12,7 @@
 
 import { useEffect, useRef } from 'react'
 
-export default function TextInputOverlay({ screenPos, onCommit, onCancel, font = 'Caveat', fontSize = 18 }) {
+export default function TextInputOverlay({ screenPos, onCommit, onCancel, font = 'Caveat', fontSize = 18, initialValue = '' }) {
   const ref = useRef(null)
 
   // Auto-focus and select-all on mount
@@ -49,7 +49,7 @@ export default function TextInputOverlay({ screenPos, onCommit, onCancel, font =
     <textarea
       ref={ref}
       rows={1}
-      defaultValue=""
+      defaultValue={initialValue}
       onKeyDown={handleKeyDown}
       onBlur={handleBlur}
       onPointerDown={stopProp}
