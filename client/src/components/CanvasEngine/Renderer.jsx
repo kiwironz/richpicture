@@ -51,19 +51,26 @@ function drawArrowLabel(svgNS, el) {
     ? pts[midIdx + 1]
     : { x: (pts[midIdx].x + pts[midIdx + 1].x) / 2, y: (pts[midIdx].y + pts[midIdx + 1].y) / 2 }
 
-  // Perpendicular direction using the segment at the midpoint
+  // Segment at the midpoint — determines angle and perpendicular offset direction
   const segA = pts[midIdx]
   const segB = pts[Math.min(midIdx + 1, pts.length - 1)]
   const dx = segB.x - segA.x
   const dy = segB.y - segA.y
   const len = Math.hypot(dx, dy) || 1
-  // Two candidate perpendiculars — pick the one pointing more "up" in SVG (lower Y)
-  const nx1 = -dy / len, ny1 =  dx / len
-  const nx2 =  dy / len, ny2 = -dx / len
+
+  // Normalised direction and perpendicular (always pick the "up" side in screen space)
+  const ux = dx / len, uy = dy / len          // unit along arrow
+  const nx1 = -uy,     ny1 =  ux             // left-hand perpendicular
+  const nx2 =  uy,     ny2 = -ux             // right-hand perpendicular
   const [nx, ny] = ny1 <= ny2 ? [nx1, ny1] : [nx2, ny2]
 
-  const OFFSET   = 16
+  // Angle of the arrow in degrees — flip if pointing left to keep text readable
+  let angleDeg = Math.atan2(dy, dx) * (180 / Math.PI)
+  if (angleDeg > 90 || angleDeg < -90) angleDeg += 180
+
+  const OFFSET   = 14
   const fontSize = el.labelFontSize ?? 14
+  // Label sits offset perpendicular to the line, centred at midpoint
   const tx = mid.x + nx * OFFSET
   const ty = mid.y + ny * OFFSET
 
@@ -73,6 +80,8 @@ function drawArrowLabel(svgNS, el) {
 
   const g = document.createElementNS(svgNS, 'g')
   g.setAttribute('pointer-events', 'none')
+  // Rotate the whole label group around the text anchor point
+  g.setAttribute('transform', `rotate(${angleDeg}, ${tx}, ${ty})`)
 
   const bg = document.createElementNS(svgNS, 'rect')
   bg.setAttribute('x',      tx - estW / 2 - padX)
