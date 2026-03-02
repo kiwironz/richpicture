@@ -127,6 +127,8 @@ function drawText(svgNS, el) {
   text.setAttribute('y', el.y)
   text.setAttribute('font-family', `'${el.font}', cursive`)
   text.setAttribute('font-size', el.fontSize ?? 18)
+  text.setAttribute('font-weight', el.fontWeight ?? 'normal')
+  text.setAttribute('font-style',  el.fontStyle  ?? 'normal')
   text.setAttribute('fill', el.color ?? '#1a1a2e')
   if (el.rotation) {
     text.setAttribute('transform', `rotate(${el.rotation}, ${el.x}, ${el.y})`)

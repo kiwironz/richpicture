@@ -78,11 +78,13 @@ export function createText({
   y          = 0,
   font       = 'Caveat',
   fontSize   = 18,
+  fontWeight = 'normal',  // 'normal' | 'bold'
+  fontStyle  = 'normal',  // 'normal' | 'italic'
   rotation   = 0,         // degrees, slight random skew for hand-drawn feel
   color      = '#1a1a2e',
   parentId   = null,      // id of a shape/icon this text is anchored to (moves with parent)
 } = {}) {
-  return { id: generateId(), kind: 'text', content, x, y, font, fontSize, rotation, color, parentId }
+  return { id: generateId(), kind: 'text', content, x, y, font, fontSize, fontWeight, fontStyle, rotation, color, parentId }
 }
 
 // ---------------------------------------------------------------------------

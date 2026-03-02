@@ -8,6 +8,7 @@ import { useViewport } from './useViewport'
 import { useInputHandler } from './useInputHandler'
 import { useSelectTool } from './useSelectTool'
 import TextInputOverlay from './TextInputOverlay'
+import PropertiesBar from '../PropertiesBar/PropertiesBar'
 import { elementBBox, groupBBox, unionBBoxes, findParentShape } from './hitTest'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createText, createGroup, ACTIONS } from '../../store/visualStore'
@@ -186,8 +187,11 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
     : (activeTool === 'text' ? 'text' : 'crosshair')
 
   return (
-    <div className="flex-1 relative overflow-hidden">
-      <svg
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <PropertiesBar selectedIds={selectedIds} />
+
+      <div className="flex-1 relative overflow-hidden">
+        <svg
         ref={svgRef}
         className="w-full h-full"
         style={{ touchAction: 'none', cursor: svgCursor }}
@@ -287,6 +291,7 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
       )}
 
       <Renderer containerRef={viewportRef} />
+      </div>
     </div>
   )
 }
