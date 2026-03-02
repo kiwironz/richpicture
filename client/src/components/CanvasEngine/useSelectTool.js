@@ -149,13 +149,13 @@ export function useSelectTool({
       }
       updateSelected(nextSet)
       modeRef.current = 'move'
-      moveRef.current = { originClient: { x: e.clientX, y: e.clientY }, ids: nextSet, isDragging: false }
+      moveRef.current = { originClient: { x: e.clientX, y: e.clientY }, ids: nextSet, isDragging: false, dx: 0, dy: 0 }
       setCursor('grab')
     } else {
       // Drag on empty canvas → rubber-band
       if (!e.shiftKey) updateSelected(new Set())
       modeRef.current   = 'rubberband'
-      rubberRef.current = { x1: pt.x, y1: pt.y, additive: e.shiftKey }
+      rubberRef.current = { x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, additive: e.shiftKey }
       setRubberBand({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y })
       setCursor('crosshair')
     }
@@ -168,14 +168,16 @@ export function useSelectTool({
     const pt = todiagram(e)
 
     if (mode === 'move') {
-      const mv  = moveRef.current
-      // Compute delta in screen px then divide by current scale → diagram units.
-      // This is simpler and avoids any screenToDiagram stale-closure drift.
+      const mv    = moveRef.current
       const scale = viewportScaleRef.current
       const rawDx = e.clientX - mv.originClient.x
       const rawDy = e.clientY - mv.originClient.y
-      const dx = rawDx / scale
-      const dy = rawDy / scale
+      const dx    = rawDx / scale
+      const dy    = rawDy / scale
+      // Accumulate into the ref so onPointerUp can read the final value directly
+      // without going through stale state or anti-pattern side effects in updaters.
+      mv.dx = dx
+      mv.dy = dy
       if (!mv.isDragging && Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD) mv.isDragging = true
       if (mv.isDragging) { setDragOffset({ dx, dy }); setCursor('grabbing') }
     }
@@ -184,6 +186,9 @@ export function useSelectTool({
       const { ox, oy, initPt, origBbox } = resizeRef.current
       const sx = initPt.x !== ox ? Math.max(0.05, (pt.x - ox) / (initPt.x - ox)) : 1
       const sy = initPt.y !== oy ? Math.max(0.05, (pt.y - oy) / (initPt.y - oy)) : 1
+      // Accumulate into ref so onPointerUp reads final value directly.
+      resizeRef.current.lastSx = sx
+      resizeRef.current.lastSy = sy
       setResizePreview({
         x:      ox + (origBbox.x      - ox) * sx,
         y:      oy + (origBbox.y      - oy) * sy,
@@ -194,6 +199,8 @@ export function useSelectTool({
 
     if (mode === 'rubberband') {
       const rb = rubberRef.current
+      rb.x2 = pt.x
+      rb.y2 = pt.y
       setRubberBand({ x1: rb.x1, y1: rb.y1, x2: pt.x, y2: pt.y })
     }
   }, [todiagram])
@@ -208,49 +215,42 @@ export function useSelectTool({
     if (mode === 'move') {
       const mv = moveRef.current
       moveRef.current = null
-      setDragOffset(prev => {
-        if (mv?.isDragging && Math.hypot(prev.dx, prev.dy) > 0.5 && mv.ids.size > 0) {
-          dispatch({ type: ACTIONS.MOVE_ELEMENTS, payload: { ids: [...mv.ids], dx: prev.dx, dy: prev.dy } })
-        }
-        return { dx: 0, dy: 0 }
-      })
+      // Read dx/dy directly from the ref — avoids calling dispatch inside a state
+      // updater (React anti-pattern that can fire twice in Strict Mode).
+      if (mv?.isDragging && mv.ids.size > 0 && Math.hypot(mv.dx, mv.dy) > 0.5) {
+        dispatch({ type: ACTIONS.MOVE_ELEMENTS, payload: { ids: [...mv.ids], dx: mv.dx, dy: mv.dy } })
+      }
+      setDragOffset({ dx: 0, dy: 0 })
     }
 
     if (mode === 'resize') {
       const rs = resizeRef.current
       resizeRef.current = null
-      setResizePreview(prev => {
-        if (prev && rs) {
-          const { ox, oy, initPt, origBbox, ids } = rs
-          const sx = Math.max(0.05, prev.width  / Math.max(1, origBbox.width))
-          const sy = Math.max(0.05, prev.height / Math.max(1, origBbox.height))
-          dispatch({ type: ACTIONS.SCALE_ELEMENTS, payload: { ids: [...ids], ox, oy, sx, sy } })
-        }
-        return null
-      })
+      setResizePreview(null)
+      if (rs?.lastSx !== undefined && rs.ids.size > 0) {
+        dispatch({ type: ACTIONS.SCALE_ELEMENTS, payload: { ids: [...rs.ids], ox: rs.ox, oy: rs.oy, sx: rs.lastSx, sy: rs.lastSy } })
+      }
     }
 
     if (mode === 'rubberband') {
-      setRubberBand(prev => {
-        if (prev) {
-          const rx = Math.min(prev.x1, prev.x2), ry = Math.min(prev.y1, prev.y2)
-          const rw = Math.abs(prev.x2 - prev.x1), rh = Math.abs(prev.y2 - prev.y1)
-          if (rw > 4 && rh > 4) {
-            const captured = elementsWithinRect(store.elements, rx, ry, rw, rh)
-            if (activeTool === 'group' && captured.length >= 2) {
-              onGroupCreated?.(captured)
-            } else {
-              const additive = rubberRef.current?.additive ?? false
-              const nextSet  = additive
-                ? new Set([...selectedIdsRef.current, ...captured])
-                : new Set(captured)
-              updateSelected(nextSet)
-            }
+      const rb = rubberRef.current
+      rubberRef.current = null
+      setRubberBand(null)
+      if (rb) {
+        const rx = Math.min(rb.x1, rb.x2), ry = Math.min(rb.y1, rb.y2)
+        const rw = Math.abs(rb.x2 - rb.x1),  rh = Math.abs(rb.y2 - rb.y1)
+        if (rw > 4 && rh > 4) {
+          const captured = elementsWithinRect(store.elements, rx, ry, rw, rh)
+          if (activeTool === 'group' && captured.length >= 2) {
+            onGroupCreated?.(captured)
+          } else {
+            const nextSet = rb.additive
+              ? new Set([...selectedIdsRef.current, ...captured])
+              : new Set(captured)
+            updateSelected(nextSet)
           }
         }
-        rubberRef.current = null
-        return null
-      })
+      }
     }
   }, [dispatch, activeTool, store.elements, onGroupCreated, updateSelected])
 
