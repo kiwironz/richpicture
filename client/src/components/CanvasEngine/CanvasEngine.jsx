@@ -14,7 +14,13 @@ import { useVisualStore } from '../../store/VisualStoreContext'
 import { createText, createGroup, createIcon, ACTIONS } from '../../store/visualStore'
 import { ICON_LIBRARY } from '../../assets/iconLibrary'
 
-export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = null, onIconPlaced }) {
+export default function CanvasEngine({
+  activeTool = 'freehand',
+  pendingIcon = null,
+  onIconPlaced,
+  pendingImageFile = null,
+  onImagePlaced,
+}) {
   const svgRef      = useRef(null)
   const viewportRef = useRef(null)
 
@@ -23,29 +29,44 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
   const { transform, transformString, screenToDiagram, handlers: viewportHandlers } = useViewport()
   const viewportScale = transform.scale
 
-  // ---- Place library icon at viewport centre when pendingIcon is set (click flow) ----
-  // Each click offsets slightly so icons don't all stack on top of each other.
-  const pendingIconCountRef = useRef(0)
+  // ---- Place-icon mode: track cursor position for ghost, place on click ----
+  const [placePos, setPlacePos] = useState(null)   // diagram coords of cursor
+
+  const placeHandlers = {
+    onPointerMove(e) {
+      if (!svgRef.current) return
+      const rect = svgRef.current.getBoundingClientRect()
+      setPlacePos(screenToDiagram(e.clientX - rect.left, e.clientY - rect.top))
+    },
+    onPointerLeave() { setPlacePos(null) },
+    onPointerDown(e) {
+      if (e.button !== 0 || !pendingIcon) return
+      e.preventDefault()
+      const rect = svgRef.current.getBoundingClientRect()
+      const pos  = screenToDiagram(e.clientX - rect.left, e.clientY - rect.top)
+      dispatch({
+        type: ACTIONS.ADD_ICON,
+        payload: createIcon({
+          ...pendingIcon,
+          x: pos.x - 40,
+          y: pos.y - 40,
+          width:  80,
+          height: 80,
+          renderMode: 'rough',
+        }),
+      })
+      setPlacePos(null)
+      onIconPlaced?.()
+    },
+  }
+
+  // ---- Place image file when selected via file picker (places at viewport centre) ----
   useEffect(() => {
-    if (!pendingIcon || !svgRef.current) return
-    const rect   = svgRef.current.getBoundingClientRect()
-    const centre = screenToDiagram(rect.width / 2, rect.height / 2)
-    const n      = pendingIconCountRef.current++
-    const offset = 20  // diagram px spacing between successive click-placed icons
-    dispatch({
-      type: ACTIONS.ADD_ICON,
-      payload: createIcon({
-        ...pendingIcon,
-        x: centre.x - 40 + (n % 5) * offset,
-        y: centre.y - 40 + Math.floor(n / 5) * offset,
-        width:  80,
-        height: 80,
-        renderMode: 'rough',
-      }),
-    })
-    onIconPlaced?.()
+    if (!pendingImageFile) return
+    placeImageFile(pendingImageFile, null)
+    onImagePlaced?.()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingIcon])
+  }, [pendingImageFile])
   const { onWheel, onTouchMove, ...viewportPointerHandlers } = viewportHandlers
 
   // Non-passive wheel + touchmove
@@ -205,7 +226,12 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
       const tag = document.activeElement?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
-      if (e.key === 'Escape') { setSelectedIds(new Set()); setTextInput(null); return }
+      if (e.key === 'Escape') {
+        setSelectedIds(new Set())
+        setTextInput(null)
+        if (activeTool === 'place-icon') { setPlacePos(null); onIconPlaced?.() }
+        return
+      }
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
         e.preventDefault()
@@ -247,7 +273,7 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [textInput, selectedIds, activeTool, dispatch, undo, redo, setSelectedIds, store.elements.groups])
+  }, [textInput, selectedIds, activeTool, onIconPlaced, dispatch, undo, redo, setSelectedIds, store.elements.groups])
 
   // ---- Combine pointer handlers ----
   // Viewport pan uses middle-mouse (button 1); draw uses left (button 0);
@@ -289,9 +315,11 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
   const RB_SW_D        = 1 / viewportScale
   const RB_DASH_D      = `${4 / viewportScale} ${3 / viewportScale}`
 
-  const svgCursor = (activeTool === 'select' || activeTool === 'group')
-    ? selectCursor
-    : (activeTool === 'text' ? 'text' : 'crosshair')
+  const svgCursor = activeTool === 'place-icon'
+    ? 'cell'
+    : (activeTool === 'select' || activeTool === 'group')
+      ? selectCursor
+      : (activeTool === 'text' ? 'text' : 'crosshair')
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -304,10 +332,37 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
         style={{ touchAction: 'none', cursor: svgCursor }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        {...combinedHandlers}
+        {...(activeTool === 'place-icon' ? placeHandlers : combinedHandlers)}
       >
         <g ref={viewportRef} transform={transformString}>
           {/* Renderer populates layer groups inside this group imperatively */}
+
+          {/* Place-icon ghost — dashed rect that follows the cursor */}
+          {activeTool === 'place-icon' && placePos && (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect
+                x={placePos.x - 40}
+                y={placePos.y - 40}
+                width={80}
+                height={80}
+                fill="rgba(59,130,246,0.08)"
+                stroke="#3b82f6"
+                strokeWidth={1.5 / viewportScale}
+                strokeDasharray={`${5 / viewportScale} ${3 / viewportScale}`}
+                rx={3 / viewportScale}
+              />
+              <line
+                x1={placePos.x - 8 / viewportScale} y1={placePos.y}
+                x2={placePos.x + 8 / viewportScale} y2={placePos.y}
+                stroke="#3b82f6" strokeWidth={1.5 / viewportScale}
+              />
+              <line
+                x1={placePos.x} y1={placePos.y - 8 / viewportScale}
+                x2={placePos.x} y2={placePos.y + 8 / viewportScale}
+                stroke="#3b82f6" strokeWidth={1.5 / viewportScale}
+              />
+            </g>
+          )}
 
           {/* In-progress stroke ghost */}
           {isDrawing && stroke.length > 1 && (

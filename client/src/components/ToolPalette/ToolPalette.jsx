@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+
 /**
  * ToolPalette — explicit shape-selection sidebar.
  * The user picks a shape type before drawing; the stroke is then snapped
@@ -111,7 +113,23 @@ export const TOOLS = [
   },
 ]
 
-export default function ToolPalette({ activeTool, onToolChange }) {
+const IMAGE_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+)
+
+export default function ToolPalette({ activeTool, onToolChange, onImagePicked }) {
+  const fileInputRef = useRef(null)
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (file) onImagePicked?.(file)
+    e.target.value = ''   // reset so the same file can be re-picked
+  }
+
   return (
     <aside className="w-14 h-full bg-white border-r border-stone-200 flex flex-col items-center py-3 gap-1 shrink-0">
       {TOOLS.map(tool => (
@@ -129,6 +147,25 @@ export default function ToolPalette({ activeTool, onToolChange }) {
           <span className="w-5 h-5">{tool.icon}</span>
         </button>
       ))}
+
+      {/* Divider */}
+      <div className="w-8 border-t border-stone-200 my-1" />
+
+      {/* Image file picker — not a drawing tool, just a loader */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <button
+        title="Load image from file"
+        onClick={() => fileInputRef.current?.click()}
+        className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+      >
+        <span className="w-5 h-5">{IMAGE_ICON}</span>
+      </button>
     </aside>
   )
 }
