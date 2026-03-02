@@ -72,8 +72,13 @@ export function createIcon({
   // Semantic description — used by LLM export; optionally rendered on canvas
   description        = label || '',  // defaults to library icon label if available
   descriptionVisible = false,        // whether to render it as visible text on canvas
+  descriptionFont       = 'Caveat',
+  descriptionFontSize   = 13,
+  descriptionFontWeight = 'normal',
+  descriptionFontStyle  = 'normal',
+  descriptionColor      = '#1a1a2e',
 } = {}) {
-  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType, renderMode, paths, viewBoxW, viewBoxH, roughness, stroke, strokeWidth, description, descriptionVisible }
+  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType, renderMode, paths, viewBoxW, viewBoxH, roughness, stroke, strokeWidth, description, descriptionVisible, descriptionFont, descriptionFontSize, descriptionFontWeight, descriptionFontStyle, descriptionColor }
 }
 
 export function createGroup({

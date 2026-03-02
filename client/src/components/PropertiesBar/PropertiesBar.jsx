@@ -189,6 +189,12 @@ export default function PropertiesBar({ selectedIds }) {
     ? (icons.every(ic => ic.description === icons[0].description) ? (icons[0].description ?? '') : '')
     : ''
   const descVisible = hasIcon && icons.every(ic => ic.descriptionVisible)
+  // Description typography
+  const descFontVal      = hasIcon ? (icons[0].descriptionFont       ?? 'Caveat')  : 'Caveat'
+  const descFontSizeVal  = hasIcon ? (icons[0].descriptionFontSize   ?? 13)        : 13
+  const descIsBold       = hasIcon && icons.every(ic => (ic.descriptionFontWeight ?? 'normal') === 'bold')
+  const descIsItalic     = hasIcon && icons.every(ic => (ic.descriptionFontStyle  ?? 'normal') === 'italic')
+  const descColorVal     = hasIcon ? (icons[0].descriptionColor ?? '#1a1a2e') : '#1a1a2e'
 
   // --- Update helpers ---
   function setDefault(key, val) {
@@ -262,6 +268,12 @@ export default function PropertiesBar({ selectedIds }) {
     const next = !descVisible
     icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionVisible: next } }))
   }
+
+  function setDescFont(font)      { icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFont: font } })) }
+  function setDescFontSize(size)  { icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFontSize: Number(size) } })) }
+  function setDescColor(color)    { icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionColor: color } })) }
+  function toggleDescBold()       { const next = descIsBold ? 'normal' : 'bold';   icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFontWeight: next } })) }
+  function toggleDescItalic()     { const next = descIsItalic ? 'normal' : 'italic'; icons.forEach(ic => dispatch({ type: ACTIONS.UPDATE_ICON, payload: { ...ic, descriptionFontStyle: next } })) }
 
   const modeLabel = hasSelection ? null : (
     <span className="text-xs text-stone-400 italic shrink-0">defaults</span>
@@ -395,19 +407,44 @@ export default function PropertiesBar({ selectedIds }) {
             title={descVisible ? 'Hide description on canvas' : 'Show description on canvas'}
           >
             {descVisible
-              ? /* eye-open */
-                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              ? <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                   <ellipse cx="8" cy="8" rx="6" ry="4" />
                   <circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none" />
                 </svg>
-              : /* eye-closed */
-                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              : <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M2 8c1.5-3 9.5-3 12 0" />
                   <line x1="3" y1="11" x2="5" y2="9" />
                   <line x1="8" y1="12" x2="8" y2="10" />
                   <line x1="13" y1="11" x2="11" y2="9" />
                 </svg>
             }
+          </Btn>
+          {/* Description typography */}
+          <ColorSwatch value={descColorVal} onChange={setDescColor} title="Description text colour" />
+          <select
+            value={descFontVal}
+            onChange={e => setDescFont(e.target.value)}
+            title="Description font"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 shrink-0"
+            style={{ fontFamily: `'${descFontVal}', cursive`, maxWidth: 130 }}
+          >
+            {FONTS.map(f => (
+              <option key={f} value={f} style={{ fontFamily: `'${f}', cursive` }}>{f}</option>
+            ))}
+          </select>
+          <select
+            value={descFontSizeVal}
+            onChange={e => setDescFontSize(e.target.value)}
+            title="Description font size"
+            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 w-14 shrink-0"
+          >
+            {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <Btn onClick={toggleDescBold}   active={descIsBold}   title="Description bold">
+            <span className="font-bold w-3 text-center">B</span>
+          </Btn>
+          <Btn onClick={toggleDescItalic} active={descIsItalic} title="Description italic">
+            <span className="italic w-3 text-center">I</span>
           </Btn>
         </>
       )}

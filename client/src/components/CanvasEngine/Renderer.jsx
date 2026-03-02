@@ -143,9 +143,11 @@ function descriptionText(svgNS, el) {
   t.setAttribute('x', el.x + (el.width ?? 80) / 2)
   t.setAttribute('y', el.y + (el.height ?? 80) + 15)
   t.setAttribute('text-anchor', 'middle')
-  t.setAttribute('font-family', "'Caveat', cursive")
-  t.setAttribute('font-size', '13')
-  t.setAttribute('fill', '#1a1a2e')
+  t.setAttribute('font-family', `'${el.descriptionFont ?? 'Caveat'}', cursive`)
+  t.setAttribute('font-size',   el.descriptionFontSize   ?? 13)
+  t.setAttribute('font-weight', el.descriptionFontWeight ?? 'normal')
+  t.setAttribute('font-style',  el.descriptionFontStyle  ?? 'normal')
+  t.setAttribute('fill',        el.descriptionColor      ?? '#1a1a2e')
   t.setAttribute('pointer-events', 'none')
   t.textContent = el.description
   return t
