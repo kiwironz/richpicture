@@ -18,7 +18,6 @@ import { useCallback, useRef } from 'react'
 import { useStrokeAccumulator } from './useStrokeAccumulator'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createShape, createArrow, ACTIONS } from '../../store/visualStore'
-import { findNearestElement } from './hitTest'
 
 // ---------------------------------------------------------------------------
 // Snap helpers
@@ -32,7 +31,7 @@ function boundingRect(pts) {
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
-function buildElement(tool, points, styleState, elements) {
+function buildElement(tool, points, styleState) {
   const roughness = styleState?.globalRoughness ?? 1.5
   const stroke    = styleState?.defaultStroke   ?? '#1a1a2e'
   const fill      = styleState?.defaultFill     ?? 'none'
@@ -49,19 +48,10 @@ function buildElement(tool, points, styleState, elements) {
     case 'line':
     case 'arrow':
     case 'bidirectional': {
-      const start  = points[0]
-      const end    = points[points.length - 1]
-      const srcHit = findNearestElement(elements, start.x, start.y)
-      const tgtHit = findNearestElement(elements, end.x,   end.y)
+      const start = points[0]
+      const end   = points[points.length - 1]
       const arrowType = tool === 'line' ? 'undirected' : tool === 'bidirectional' ? 'bidirectional' : 'directional'
-      return { kind: 'arrow', element: createArrow({
-        type:      arrowType,
-        startPoint: start,
-        endPoint:   end,
-        stroke,
-        sourceId:  srcHit?.id ?? null,
-        targetId:  tgtHit?.id ?? null,
-      })}
+      return { kind: 'arrow', element: createArrow({ type: arrowType, startPoint: start, endPoint: end, stroke }) }
     }
     case 'freehand':
     default:
@@ -134,12 +124,12 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
     const points = finishStroke()
     if (points.length < 2) return
 
-    const { kind, element } = buildElement(activeTool, points, store.styleState, store.elements)
+    const { kind, element } = buildElement(activeTool, points, store.styleState)
     dispatch({
       type:    kind === 'arrow' ? ACTIONS.ADD_ARROW : ACTIONS.ADD_SHAPE,
       payload: element,
     })
-  }, [activeTool, isDrawing, finishStroke, onTextClick, todiagram, dispatch, store.styleState, store.elements])
+  }, [activeTool, isDrawing, finishStroke, onTextClick, todiagram, dispatch, store.styleState])
 
   const onPointerCancel = useCallback(() => {
     textDownRef.current = null

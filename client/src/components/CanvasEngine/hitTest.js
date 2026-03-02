@@ -113,47 +113,6 @@ export function hitTestAll(elements, x, y) {
   return null
 }
 
-// Returns the id + kind of the nearest named element (icon, shape, text) to point (x,y),
-// within the given snap radius (diagram px). Prefers icons > shapes > texts.
-// Used to resolve arrow source/target element IDs at creation time.
-export function findNearestElement(elements, x, y, radius = 60) {
-  const candidates = []
-
-  for (const el of (elements.icons ?? [])) {
-    const cx = el.x + (el.width  ?? 80) / 2
-    const cy = el.y + (el.height ?? 80) / 2
-    const d  = Math.hypot(x - cx, y - cy)
-    if (d <= radius) candidates.push({ id: el.id, kind: 'icon', d })
-  }
-
-  for (const el of (elements.shapes ?? [])) {
-    const bbox = elementBBox(el)
-    if (!bbox) continue
-    const cx = bbox.x + bbox.width  / 2
-    const cy = bbox.y + bbox.height / 2
-    const d  = Math.hypot(x - cx, y - cy)
-    if (d <= radius) candidates.push({ id: el.id, kind: 'shape', d })
-  }
-
-  for (const el of (elements.texts ?? [])) {
-    const bbox = elementBBox(el)
-    if (!bbox) continue
-    const cx = bbox.x + bbox.width  / 2
-    const cy = bbox.y + bbox.height / 2
-    const d  = Math.hypot(x - cx, y - cy)
-    if (d <= radius) candidates.push({ id: el.id, kind: 'text', d })
-  }
-
-  if (!candidates.length) return null
-  // Sort: icons first (they are the primary named actors/systems), then by distance
-  candidates.sort((a, b) => {
-    const kindOrder = { icon: 0, shape: 1, text: 2 }
-    const ko = kindOrder[a.kind] - kindOrder[b.kind]
-    return ko !== 0 ? ko : a.d - b.d
-  })
-  return candidates[0]
-}
-
 // Returns the id of the SMALLEST-AREA shape that contains (x, y), for text parentId
 // detection.  Uses bounding-box containment for all shapes (including freehand) so that
 // clicking anywhere inside a freehand loop associates the text with it rather than with
