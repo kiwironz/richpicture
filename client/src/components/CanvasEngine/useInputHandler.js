@@ -46,11 +46,12 @@ function buildElement(gestureName, points, styleState) {
       }
     }
     case 'arrow': {
-      // Use stroke endpoints as start/end; ignore head points added in template
+      // Straight-line gesture in freehand mode → undirected connector.
+      // Directionality is applied by the Arrow tool in the palette (Phase 1 step 8).
       return {
         kind:    'arrow',
         element: createArrow({
-          type:       'directional',
+          type:       'undirected',
           startPoint: points[0],
           endPoint:   points[points.length - 1],
         }),

@@ -39,28 +39,17 @@ function closureDistance(pts) {
 
 // ---------------------------------------------------------------------------
 // Zigzag detection
-// Count how many times the stroke reverses direction along its dominant axis.
+// A zigzag drawn left-to-right has reversals on the Y axis, not the X axis.
+// Count reversals on BOTH axes and return the maximum.
 // ---------------------------------------------------------------------------
 
-function countReversals(pts) {
+function countReversalsOnAxis(pts, axis) {
   if (pts.length < 3) return 0
-
-  // Smooth the points slightly to ignore micro-jitter
-  const smoothed = pts.filter((_, i) => i % 3 === 0)
-  if (smoothed.length < 3) return 0
-
-  // Determine dominant axis (larger bounding box dimension)
-  const xs = pts.map(p => p.x)
-  const ys = pts.map(p => p.y)
-  const xRange = Math.max(...xs) - Math.min(...xs)
-  const yRange = Math.max(...ys) - Math.min(...ys)
-  const axis = xRange >= yRange ? 'x' : 'y'
-
   let reversals = 0
   let prevDir = null
-  for (let i = 1; i < smoothed.length; i++) {
-    const delta = smoothed[i][axis] - smoothed[i - 1][axis]
-    if (Math.abs(delta) < 2) continue     // ignore near-stationary movement
+  for (let i = 1; i < pts.length; i++) {
+    const delta = pts[i][axis] - pts[i - 1][axis]
+    if (Math.abs(delta) < 2) continue
     const dir = delta > 0 ? 1 : -1
     if (prevDir !== null && dir !== prevDir) reversals++
     prevDir = dir
@@ -68,17 +57,29 @@ function countReversals(pts) {
   return reversals
 }
 
+function countReversals(pts) {
+  if (pts.length < 3) return 0
+  // Subsample to reduce jitter — but not so aggressively that zigzag peaks are lost
+  const step     = Math.max(1, Math.floor(pts.length / 60))
+  const smoothed = pts.filter((_, i) => i % step === 0)
+  const rx = countReversalsOnAxis(smoothed, 'x')
+  const ry = countReversalsOnAxis(smoothed, 'y')
+  return Math.max(rx, ry)
+}
+
 // ---------------------------------------------------------------------------
 // Corner detection
 // A corner is a point where the stroke direction changes sharply (> threshold°).
 // ---------------------------------------------------------------------------
 
-function countCorners(pts, thresholdDeg = 45) {
+function countCorners(pts, thresholdDeg = 35) {
   if (pts.length < 5) return 0
   const threshold = (thresholdDeg * Math.PI) / 180
 
-  // Sample every few points for stability
-  const step   = Math.max(1, Math.floor(pts.length / 40))
+  // Sample at ~60 points — fine enough to catch hand-drawn corners without
+  // noise. Using a fixed target rather than pts.length/40 avoids over-smoothing
+  // short strokes.
+  const step   = Math.max(1, Math.floor(pts.length / 60))
   const sample = pts.filter((_, i) => i % step === 0)
 
   let corners = 0
@@ -94,7 +95,7 @@ function countCorners(pts, thresholdDeg = 45) {
     const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
     if (angle > threshold) {
       corners++
-      i += 2  // skip ahead to avoid double-counting the same corner region
+      i += 1  // skip one point only — avoids double-counting without skipping adjacent corners
     }
   }
   return corners
