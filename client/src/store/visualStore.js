@@ -54,15 +54,23 @@ export function createArrow({
 }
 
 export function createIcon({
-  src      = '',         // URL or data URI
-  x        = 0,
-  y        = 0,
-  width    = 64,
-  height   = 64,
-  label    = '',
-  actorType = null,      // 'individual' | 'role' | 'group' | 'organisation' | 'external_agent' | null
+  src        = '',         // URL or data URI — used when renderMode = 'image'
+  x          = 0,
+  y          = 0,
+  width      = 80,
+  height     = 80,
+  label      = '',
+  actorType  = null,       // 'individual' | 'role' | 'group' | etc
+  // Rough rendering (built-in library icons)
+  renderMode = 'image',    // 'image' | 'rough'
+  paths      = [],         // [{d, stroke?, fill?, strokeWidth?}] for rough mode
+  viewBoxW   = 100,
+  viewBoxH   = 100,
+  roughness  = 1.5,
+  stroke     = '#1a1a2e',
+  strokeWidth = 2,
 } = {}) {
-  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType }
+  return { id: generateId(), kind: 'icon', src, x, y, width, height, label, actorType, renderMode, paths, viewBoxW, viewBoxH, roughness, stroke, strokeWidth }
 }
 
 export function createGroup({

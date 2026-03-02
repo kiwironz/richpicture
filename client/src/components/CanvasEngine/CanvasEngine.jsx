@@ -11,9 +11,9 @@ import TextInputOverlay from './TextInputOverlay'
 import PropertiesBar from '../PropertiesBar/PropertiesBar'
 import { elementBBox, groupBBox, unionBBoxes, findParentShape } from './hitTest'
 import { useVisualStore } from '../../store/VisualStoreContext'
-import { createText, createGroup, ACTIONS } from '../../store/visualStore'
+import { createText, createGroup, createIcon, ACTIONS } from '../../store/visualStore'
 
-export default function CanvasEngine({ activeTool = 'freehand' }) {
+export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = null, onIconPlaced }) {
   const svgRef      = useRef(null)
   const viewportRef = useRef(null)
 
@@ -21,6 +21,27 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
 
   const { transform, transformString, screenToDiagram, handlers: viewportHandlers } = useViewport()
   const viewportScale = transform.scale
+
+  // ---- Place library icon at viewport centre when pendingIcon is set ----
+  useEffect(() => {
+    if (!pendingIcon || !svgRef.current) return
+    const rect = svgRef.current.getBoundingClientRect()
+    const centre = screenToDiagram(rect.width / 2, rect.height / 2)
+    dispatch({
+      type: ACTIONS.ADD_ICON,
+      payload: createIcon({
+        ...pendingIcon,
+        x: centre.x - 40,
+        y: centre.y - 40,
+        width:  80,
+        height: 80,
+        renderMode: 'rough',
+      }),
+    })
+    onIconPlaced?.()
+  // screenToDiagram changes with transform — but we only want to fire when pendingIcon is set.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingIcon])
   const { onWheel, onTouchMove, ...viewportPointerHandlers } = viewportHandlers
 
   // Non-passive wheel + touchmove
@@ -64,6 +85,55 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
   }, [textInput, store.elements, store.styleState, dispatch])
 
   const cancelText = useCallback(() => setTextInput(null), [])
+
+  // ---- Image drop & paste ----
+  const placeImageFile = useCallback((file, dropPos) => {
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rect = svgRef.current?.getBoundingClientRect() ?? { width: 800, height: 600 }
+      const pos  = dropPos ?? screenToDiagram(rect.width / 2, rect.height / 2)
+      dispatch({
+        type: ACTIONS.ADD_ICON,
+        payload: createIcon({
+          src:        ev.target.result,
+          renderMode: 'image',
+          x:          pos.x - 60,
+          y:          pos.y - 60,
+          width:      120,
+          height:     120,
+        }),
+      })
+    }
+    reader.readAsDataURL(file)
+  }, [svgRef, screenToDiagram, dispatch])
+
+  const handleDragOver = useCallback((e) => {
+    if (Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    }
+  }, [])
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+    if (!file) return
+    const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+    const pos  = screenToDiagram(e.clientX - rect.left, e.clientY - rect.top)
+    placeImageFile(file, pos)
+  }, [svgRef, screenToDiagram, placeImageFile])
+
+  useEffect(() => {
+    function onPaste(e) {
+      if (textInput) return  // don't intercept while text overlay is open
+      const item = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'))
+      if (!item) return
+      const file = item.getAsFile()
+      if (file) placeImageFile(file, null)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [textInput, placeImageFile])
 
   // ---- Group creation callback ----
   // Uses a stable ref so the callback can access setSelectedIds even though
@@ -206,6 +276,8 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
         ref={svgRef}
         className="w-full h-full"
         style={{ touchAction: 'none', cursor: svgCursor }}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         {...combinedHandlers}
       >
         <g ref={viewportRef} transform={transformString}>

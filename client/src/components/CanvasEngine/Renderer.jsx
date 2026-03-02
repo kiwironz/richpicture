@@ -137,14 +137,35 @@ function drawText(svgNS, el) {
   return text
 }
 
-function drawIcon(svgNS, el) {
+function drawIcon(rc, svgNS, el) {
+  // Rough-path mode: library icons rendered sketchy via rough.js path()
+  if (el.renderMode === 'rough' && el.paths?.length) {
+    const g = document.createElementNS(svgNS, 'g')
+    const scaleX = (el.width  ?? 80) / (el.viewBoxW ?? 100)
+    const scaleY = (el.height ?? 80) / (el.viewBoxH ?? 100)
+    g.setAttribute('transform', `translate(${el.x}, ${el.y}) scale(${scaleX}, ${scaleY})`)
+    el.paths.forEach(p => {
+      const node = rc.path(p.d, {
+        roughness:   el.roughness  ?? 1.5,
+        stroke:      p.stroke      ?? el.stroke     ?? '#1a1a2e',
+        strokeWidth: p.strokeWidth ?? el.strokeWidth ?? 2,
+        fill:        p.fill        ?? 'none',
+        fillStyle:   'hachure',
+        hachureGap:  8,
+      })
+      g.appendChild(node)
+    })
+    return g
+  }
+
+  // Image mode: plain <image> element (PNG, JPG, SVG data URI)
   if (!el.src) return null
   const img = document.createElementNS(svgNS, 'image')
   img.setAttribute('href', el.src)
   img.setAttribute('x', el.x)
   img.setAttribute('y', el.y)
-  img.setAttribute('width', el.width ?? 64)
-  img.setAttribute('height', el.height ?? 64)
+  img.setAttribute('width',  el.width  ?? 80)
+  img.setAttribute('height', el.height ?? 80)
   return img
 }
 
@@ -207,7 +228,7 @@ export default function Renderer({ containerRef }) {
     const iconsLayer = layersRef.current['layer-icons']
     iconsLayer.innerHTML = ''
     icons.forEach(el => {
-      const node = drawIcon(svgNS, el)
+      const node = drawIcon(rc, svgNS, el)
       if (node) {
         node.setAttribute('data-id', el.id)
         iconsLayer.appendChild(node)

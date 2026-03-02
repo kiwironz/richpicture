@@ -10,6 +10,17 @@
 
 export const TOOLS = [
   {
+    id: 'icons',
+    label: 'Icon Library',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="3" />
+        <path d="M2 21l6-6 4 4 4-5 6 6" />
+        <rect x="1" y="1" width="22" height="22" rx="2" />
+      </svg>
+    ),
+  },
+  {
     id: 'select',
     label: 'Select  (S)',
     icon: (

@@ -164,7 +164,7 @@ export function elementBBox(el) {
   }
 
   if (el.kind === 'icon') {
-    return { x: el.x, y: el.y, width: el.width ?? 64, height: el.height ?? 64 }
+    return { x: el.x, y: el.y, width: el.width ?? 80, height: el.height ?? 80 }
   }
 
   return null
