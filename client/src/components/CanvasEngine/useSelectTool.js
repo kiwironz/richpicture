@@ -73,9 +73,13 @@ export function useSelectTool({
 
   const modeRef        = useRef(null)      // null | 'move' | 'resize' | 'rubberband'
   const selectedIdsRef = useRef(new Set())
-  const moveRef        = useRef(null)      // { origin, ids, isDragging }
+  const moveRef        = useRef(null)      // { originClient:{x,y}, ids, isDragging }
   const resizeRef      = useRef(null)      // { ox, oy, initPt, origBbox, ids }
   const rubberRef      = useRef(null)      // { x1, y1, additive }
+
+  // Keep a always-current ref to viewportScale so move callbacks never go stale.
+  const viewportScaleRef = useRef(viewportScale)
+  viewportScaleRef.current = viewportScale
 
   const enabled = activeTool === 'select' || activeTool === 'group'
 
@@ -145,7 +149,7 @@ export function useSelectTool({
       }
       updateSelected(nextSet)
       modeRef.current = 'move'
-      moveRef.current = { origin: pt, ids: nextSet, isDragging: false }
+      moveRef.current = { originClient: { x: e.clientX, y: e.clientY }, ids: nextSet, isDragging: false }
       setCursor('grab')
     } else {
       // Drag on empty canvas → rubber-band
@@ -164,9 +168,15 @@ export function useSelectTool({
     const pt = todiagram(e)
 
     if (mode === 'move') {
-      const mv = moveRef.current
-      const dx = pt.x - mv.origin.x, dy = pt.y - mv.origin.y
-      if (!mv.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) mv.isDragging = true
+      const mv  = moveRef.current
+      // Compute delta in screen px then divide by current scale → diagram units.
+      // This is simpler and avoids any screenToDiagram stale-closure drift.
+      const scale = viewportScaleRef.current
+      const rawDx = e.clientX - mv.originClient.x
+      const rawDy = e.clientY - mv.originClient.y
+      const dx = rawDx / scale
+      const dy = rawDy / scale
+      if (!mv.isDragging && Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD) mv.isDragging = true
       if (mv.isDragging) { setDragOffset({ dx, dy }); setCursor('grabbing') }
     }
 

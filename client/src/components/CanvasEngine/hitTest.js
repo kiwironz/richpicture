@@ -106,13 +106,31 @@ export function hitTestAll(elements, x, y) {
   return null
 }
 
-// Returns the id of the topmost SHAPE under (x, y), for text parentId detection.
+// Returns the id of the SMALLEST-AREA shape that contains (x, y), for text parentId
+// detection.  Uses bounding-box containment for all shapes (including freehand) so that
+// clicking anywhere inside a freehand loop associates the text with it rather than with
+// an enclosing rendered rectangle. The smallest-bbox winner beats larger containers.
 export function findParentShape(elements, x, y) {
   const { shapes } = elements
-  for (let i = shapes.length - 1; i >= 0; i--) {
-    if (hitTestShape(shapes[i], x, y)) return shapes[i].id
+  let bestId   = null
+  let bestArea = Infinity
+
+  for (const shape of shapes) {
+    // For all shapes use bbox-containment so a click anywhere inside the shape counts.
+    // (Freehand stroke-proximity would miss clicks in the centre of a closed loop.)
+    const bbox = elementBBox(shape)
+    if (!bbox) continue
+    const inside = x >= bbox.x && x <= bbox.x + bbox.width &&
+                   y >= bbox.y && y <= bbox.y + bbox.height
+    if (!inside) continue
+
+    const area = bbox.width * bbox.height
+    if (area < bestArea) {
+      bestArea = area
+      bestId   = shape.id
+    }
   }
-  return null
+  return bestId
 }
 
 // ---------------------------------------------------------------------------
