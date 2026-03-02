@@ -67,6 +67,13 @@ export function hitTestText(el, x, y) {
   return x >= el.x && x <= el.x + w && y >= el.y - h && y <= el.y + 4
 }
 
+// Icons use plain bbox containment (they have no 'type' sub-field).
+function hitTestIcon(el, x, y) {
+  const w = el.width  ?? 80
+  const h = el.height ?? 80
+  return x >= el.x && x <= el.x + w && y >= el.y && y <= el.y + h
+}
+
 // Returns the topmost element under (x, y), checking layers top-to-bottom.
 // Freehand strokes are tested BEFORE area-fill shapes so that a freehand path
 // drawn inside a rectangle can still be directly selected.
@@ -81,7 +88,7 @@ export function hitTestAll(elements, x, y) {
 
   // Icons
   for (let i = icons.length - 1; i >= 0; i--) {
-    if (hitTestShape(icons[i], x, y)) return { kind: 'icon', element: icons[i] }
+    if (hitTestIcon(icons[i], x, y)) return { kind: 'icon', element: icons[i] }
   }
 
   // Arrows

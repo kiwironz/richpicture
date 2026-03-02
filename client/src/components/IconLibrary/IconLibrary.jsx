@@ -11,13 +11,22 @@
 import { useState } from 'react'
 import { ICON_LIBRARY, ICON_CATEGORIES } from '../../assets/iconLibrary'
 
+const DRAG_TYPE = 'application/richpicture-icon'
+
 // Render a plain SVG thumbnail (no rough treatment) for the palette grid
 function IconThumb({ icon, onClick }) {
+  function handleDragStart(e) {
+    e.dataTransfer.setData(DRAG_TYPE, icon.id)
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
   return (
     <button
+      draggable
+      onDragStart={handleDragStart}
       onClick={() => onClick(icon)}
-      title={icon.label}
-      className="flex flex-col items-center gap-1 p-1.5 rounded hover:bg-stone-100 active:bg-stone-200 transition-colors"
+      title={`${icon.label} — drag onto canvas or click to place`}
+      className="flex flex-col items-center gap-1 p-1.5 rounded hover:bg-stone-100 active:bg-stone-200 transition-colors cursor-grab active:cursor-grabbing"
     >
       <svg
         viewBox="0 0 100 100"

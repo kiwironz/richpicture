@@ -12,6 +12,7 @@ import PropertiesBar from '../PropertiesBar/PropertiesBar'
 import { elementBBox, groupBBox, unionBBoxes, findParentShape } from './hitTest'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createText, createGroup, createIcon, ACTIONS } from '../../store/visualStore'
+import { ICON_LIBRARY } from '../../assets/iconLibrary'
 
 export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = null, onIconPlaced }) {
   const svgRef      = useRef(null)
@@ -22,24 +23,27 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
   const { transform, transformString, screenToDiagram, handlers: viewportHandlers } = useViewport()
   const viewportScale = transform.scale
 
-  // ---- Place library icon at viewport centre when pendingIcon is set ----
+  // ---- Place library icon at viewport centre when pendingIcon is set (click flow) ----
+  // Each click offsets slightly so icons don't all stack on top of each other.
+  const pendingIconCountRef = useRef(0)
   useEffect(() => {
     if (!pendingIcon || !svgRef.current) return
-    const rect = svgRef.current.getBoundingClientRect()
+    const rect   = svgRef.current.getBoundingClientRect()
     const centre = screenToDiagram(rect.width / 2, rect.height / 2)
+    const n      = pendingIconCountRef.current++
+    const offset = 20  // diagram px spacing between successive click-placed icons
     dispatch({
       type: ACTIONS.ADD_ICON,
       payload: createIcon({
         ...pendingIcon,
-        x: centre.x - 40,
-        y: centre.y - 40,
+        x: centre.x - 40 + (n % 5) * offset,
+        y: centre.y - 40 + Math.floor(n / 5) * offset,
         width:  80,
         height: 80,
         renderMode: 'rough',
       }),
     })
     onIconPlaced?.()
-  // screenToDiagram changes with transform — but we only want to fire when pendingIcon is set.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingIcon])
   const { onWheel, onTouchMove, ...viewportPointerHandlers } = viewportHandlers
@@ -108,7 +112,8 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
   }, [svgRef, screenToDiagram, dispatch])
 
   const handleDragOver = useCallback((e) => {
-    if (Array.from(e.dataTransfer.types).includes('Files')) {
+    const types = Array.from(e.dataTransfer.types)
+    if (types.includes('Files') || types.includes('application/richpicture-icon')) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'copy'
     }
@@ -116,12 +121,33 @@ export default function CanvasEngine({ activeTool = 'freehand', pendingIcon = nu
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
-    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
-    if (!file) return
     const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
     const pos  = screenToDiagram(e.clientX - rect.left, e.clientY - rect.top)
-    placeImageFile(file, pos)
-  }, [svgRef, screenToDiagram, placeImageFile])
+
+    // Library icon drag-and-drop
+    const iconId = e.dataTransfer.getData('application/richpicture-icon')
+    if (iconId) {
+      const iconDef = ICON_LIBRARY.find(ic => ic.id === iconId)
+      if (iconDef) {
+        dispatch({
+          type: ACTIONS.ADD_ICON,
+          payload: createIcon({
+            ...iconDef,
+            x: pos.x - 40,
+            y: pos.y - 40,
+            width:  80,
+            height: 80,
+            renderMode: 'rough',
+          }),
+        })
+      }
+      return
+    }
+
+    // File (image) drop
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+    if (file) placeImageFile(file, pos)
+  }, [svgRef, screenToDiagram, dispatch, placeImageFile])
 
   useEffect(() => {
     function onPaste(e) {
