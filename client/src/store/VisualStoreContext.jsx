@@ -9,7 +9,7 @@
  *   canvasHash    — memoised fingerprint of current elements
  */
 
-import { createContext, useContext, useReducer, useCallback, useMemo, useRef } from 'react'
+import { createContext, useContext, useReducer, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   createInitialState,
   visualStoreReducer,
@@ -17,7 +17,20 @@ import {
   ACTIONS,
 } from './visualStore'
 
-const UNDO_LIMIT = 50
+const STORAGE_KEY = 'richpicture-diagram'
+const UNDO_LIMIT  = 50
+
+// Restore the last session from localStorage; fall back to a fresh state.
+function loadInitialState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed?.elements && parsed?.styleState) return parsed
+    }
+  } catch {}
+  return createInitialState()
+}
 
 const VisualStoreContext = createContext(null)
 
@@ -33,11 +46,19 @@ const UNDOABLE_ACTIONS = new Set([
 ])
 
 export function VisualStoreProvider({ children }) {
-  const [store, baseDispatch] = useReducer(visualStoreReducer, undefined, createInitialState)
+  const [store, baseDispatch] = useReducer(visualStoreReducer, undefined, loadInitialState)
 
   // Undo/redo history held in refs to avoid re-render on history change alone
   const past   = useRef([])   // stack of previous states
   const future = useRef([])   // stack of undone states
+
+  // Auto-save to localStorage — debounced 500ms after each change
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)) } catch {}
+    }, 500)
+    return () => clearTimeout(id)
+  }, [store])
 
   const dispatch = useCallback((action) => {
     if (UNDOABLE_ACTIONS.has(action.type)) {

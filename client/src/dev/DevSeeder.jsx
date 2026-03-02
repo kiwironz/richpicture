@@ -9,12 +9,16 @@ import { useVisualStore } from '../store/VisualStoreContext'
 import { createShape, createArrow, createText, ACTIONS } from '../store/visualStore'
 
 export default function DevSeeder() {
-  const { dispatch } = useVisualStore()
+  const { dispatch, store } = useVisualStore()
   const seeded = useRef(false)
 
   useEffect(() => {
     if (seeded.current) return
     seeded.current = true
+
+    // Skip if canvas already has content (e.g. restored from localStorage)
+    const el = store.elements
+    if (el.shapes.length || el.arrows.length || el.texts.length || el.icons.length) return
 
     // A rectangle drawn around an organisational system (semantics inferred by LLM, not encoded here)
     dispatch({ type: ACTIONS.ADD_SHAPE, payload: createShape({
@@ -86,6 +90,7 @@ export default function DevSeeder() {
       color: '#dc2626',
       rotation: -0.8,
     }) })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch])
 
   return null

@@ -12,7 +12,7 @@
 
 import { useEffect, useRef } from 'react'
 
-export default function TextInputOverlay({ screenPos, onCommit, onCancel }) {
+export default function TextInputOverlay({ screenPos, onCommit, onCancel, font = 'Caveat', fontSize = 18 }) {
   const ref = useRef(null)
 
   // Auto-focus and select-all on mount
@@ -64,8 +64,8 @@ export default function TextInputOverlay({ screenPos, onCommit, onCancel }) {
         border:     '1.5px dashed #94a3b8',
         borderRadius: 4,
         padding:    '2px 6px',
-        fontFamily: "'Caveat', cursive",
-        fontSize:   18,
+        fontFamily: `'${font}', cursive`,
+        fontSize,
         lineHeight: 1.35,
         color:      '#1a1a2e',
         outline:    'none',

@@ -1,23 +1,23 @@
 /**
- * PropertiesBar — top toolbar showing undo/redo and context-sensitive
- * style controls for the current selection.
+ * PropertiesBar — top toolbar: undo/redo, save/open/new, and contextual style controls.
  *
- * Shows:
- *   Always:              Undo / Redo buttons
- *   Shapes / arrows:     Stroke colour, Fill colour (toggle + picker)
- *   Texts:               Text colour, Font size, Bold, Italic
+ * Two modes (automatic):
+ *   Nothing selected  → edit drawing defaults (applied to newly created elements)
+ *   Selection exists  → edit the selected element(s) in place
  *
  * Props:
  *   selectedIds — Set of selected element ids
  */
 
+import { useRef } from 'react'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { ACTIONS } from '../../store/visualStore'
 
+export const FONTS     = ['Caveat', 'Patrick Hand', 'Architects Daughter', 'Kalam']
 const FONT_SIZES = [10, 12, 14, 16, 18, 22, 28, 36, 48]
 
 // ---------------------------------------------------------------------------
-// Small reusable sub-components
+// Sub-components
 // ---------------------------------------------------------------------------
 
 function Btn({ onClick, disabled, title, active, children }) {
@@ -27,7 +27,7 @@ function Btn({ onClick, disabled, title, active, children }) {
       disabled={disabled}
       title={title}
       className={[
-        'h-7 px-2 rounded text-sm flex items-center gap-1 transition-colors select-none',
+        'h-7 px-2 rounded text-sm flex items-center gap-1 transition-colors select-none whitespace-nowrap shrink-0',
         active   ? 'bg-stone-800 text-white'   : 'text-stone-600',
         disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-stone-100',
       ].join(' ')}
@@ -38,25 +38,67 @@ function Btn({ onClick, disabled, title, active, children }) {
 }
 
 function Sep() {
-  return <div className="w-px h-6 bg-stone-200 mx-1 shrink-0" />
+  return <div className="w-px h-5 bg-stone-200 mx-1 shrink-0" />
 }
 
 function ColorSwatch({ label, value, onChange, title }) {
+  // If value is 'none' or missing, show a crossed-out white square and treat it as toggleable
+  const isNone = !value || value === 'none'
   return (
-    <label className="flex items-center gap-1.5 cursor-pointer select-none" title={title}>
-      <span className="text-xs text-stone-400">{label}</span>
-      <span className="relative">
+    <label className="flex items-center gap-1 cursor-pointer select-none shrink-0" title={title}>
+      {label && <span className="text-xs text-stone-400">{label}</span>}
+      <span className="relative w-6 h-6">
         <span
           className="block w-6 h-6 rounded border border-stone-300"
-          style={{ background: value }}
+          style={{ background: isNone ? 'white' : value }}
         />
+        {isNone && (
+          <svg className="absolute inset-0 w-6 h-6 text-stone-300" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <line x1="4" y1="4" x2="20" y2="20" />
+          </svg>
+        )}
+        {!isNone && (
+          <input
+            type="color"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          />
+        )}
+      </span>
+    </label>
+  )
+}
+
+function FillControl({ value, onChange }) {
+  const isNone = !value || value === 'none'
+  return (
+    <label className="flex items-center gap-1 cursor-pointer select-none shrink-0" title="Fill (click swatch to change colour, click × to toggle)">
+      <span className="text-xs text-stone-400">Fill</span>
+      <span className="relative w-6 h-6">
+        <span
+          className="block w-6 h-6 rounded border border-stone-300"
+          style={{ background: isNone ? 'white' : value }}
+        />
+        {isNone
+          ? <svg className="absolute inset-0 w-6 h-6 text-stone-300" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><line x1="4" y1="4" x2="20" y2="20" /></svg>
+          : null
+        }
         <input
           type="color"
-          value={value}
+          value={isNone ? '#fffbeb' : value}
           onChange={e => onChange(e.target.value)}
           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
         />
       </span>
+      {/* toggle on/off */}
+      <button
+        onClick={() => onChange(isNone ? '#fffbeb' : 'none')}
+        title={isNone ? 'Enable fill' : 'Remove fill'}
+        className="text-stone-400 hover:text-stone-700 leading-none text-base select-none"
+      >
+        {isNone ? '+' : '×'}
+      </button>
     </label>
   )
 }
@@ -67,185 +109,254 @@ function ColorSwatch({ label, value, onChange, title }) {
 
 export default function PropertiesBar({ selectedIds }) {
   const { store, dispatch, undo, redo, canUndo, canRedo } = useVisualStore()
+  const fileInputRef = useRef(null)
 
-  // Expand group ids to their member ids so we can directly edit member props
+  // --- Save / Open / New ---
+  function handleNew() {
+    if (!window.confirm('Start a new diagram? Unsaved changes will be lost.')) return
+    dispatch({ type: ACTIONS.CLEAR_STORE })
+  }
+
+  function handleSave() {
+    const json = JSON.stringify(store, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = 'diagram.richpicture.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleOpen() {
+    fileInputRef.current?.click()
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const loaded = JSON.parse(ev.target.result)
+        if (loaded?.elements && loaded?.styleState) {
+          dispatch({ type: ACTIONS.LOAD_STORE, payload: loaded })
+        } else {
+          alert('Unrecognised file format.')
+        }
+      } catch {
+        alert('Could not read file.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  // --- Determine mode ---
   const expandedIds = new Set(selectedIds)
   ;(store.elements.groups ?? []).forEach(g => {
     if (expandedIds.has(g.id)) g.memberIds.forEach(id => expandedIds.add(id))
   })
-
   const allElements = [
     ...(store.elements.shapes ?? []),
     ...(store.elements.arrows ?? []),
     ...(store.elements.texts  ?? []),
     ...(store.elements.icons  ?? []),
   ]
-  const selected = allElements.filter(el => expandedIds.has(el.id))
-  const texts  = selected.filter(el => el.kind === 'text')
-  const shapes = selected.filter(el => el.kind === 'shape')
-  const arrows = selected.filter(el => el.kind === 'arrow')
-
-  const hasAny      = selected.length > 0
-  const hasText     = texts.length  > 0
-  const hasShape    = shapes.length > 0
+  const selected      = allElements.filter(el => expandedIds.has(el.id))
+  const texts         = selected.filter(el => el.kind === 'text')
+  const shapes        = selected.filter(el => el.kind === 'shape')
+  const arrows        = selected.filter(el => el.kind === 'arrow')
+  const hasSelection  = selected.length > 0
+  const hasText       = texts.length    > 0
+  const hasShape      = shapes.length   > 0
   const hasStrokeable = shapes.length > 0 || arrows.length > 0
 
-  // Representative values from first item in each kind
-  const firstShape  = shapes[0]
-  const firstArrow  = arrows[0]
-  const firstText   = texts[0]
-  const strokeVal   = firstShape?.stroke ?? firstArrow?.stroke ?? '#1a1a2e'
-  const fillVal     = firstShape?.fill ?? 'none'
-  const hasFill     = fillVal && fillVal !== 'none'
-  const textColorVal = firstText?.color ?? '#1a1a2e'
-  const fontSizeVal  = firstText?.fontSize ?? 18
-  const isBold       = hasText && texts.every(t => t.fontWeight === 'bold')
-  const isItalic     = hasText && texts.every(t => t.fontStyle  === 'italic')
+  // --- Values: selection mode uses element props, default mode uses styleState ---
+  const ss = store.styleState
+  const strokeVal    = hasStrokeable ? (shapes[0]?.stroke ?? arrows[0]?.stroke ?? '#1a1a2e') : ss.defaultStroke
+  const fillVal      = hasShape      ? (shapes[0]?.fill ?? 'none')                           : ss.defaultFill
+  const textColorVal = hasText       ? (texts[0]?.color ?? '#1a1a2e')                        : ss.defaultTextColor
+  const fontVal      = hasText       ? (texts[0]?.font  ?? 'Caveat')                         : ss.defaultFont
+  const fontSizeVal  = hasText       ? (texts[0]?.fontSize ?? 18)                            : ss.defaultFontSize
+  const isBold       = hasText ? texts.every(t => t.fontWeight === 'bold')   : ss.defaultFontWeight === 'bold'
+  const isItalic     = hasText ? texts.every(t => t.fontStyle  === 'italic') : ss.defaultFontStyle  === 'italic'
 
-  // ---- update helpers ----
-  // Multiple dispatches for multiple selected items — each adds an undo entry,
-  // which is acceptable for now; batching can be added later if needed.
+  // --- Update helpers ---
+  function setDefault(key, val) {
+    dispatch({ type: ACTIONS.SET_STYLE, payload: { [key]: val } })
+  }
 
   function setStroke(color) {
-    shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, stroke: color } }))
-    arrows.forEach(el => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...el, stroke: color } }))
+    if (hasStrokeable) {
+      shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, stroke: color } }))
+      arrows.forEach(el => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...el, stroke: color } }))
+    } else {
+      setDefault('defaultStroke', color)
+    }
   }
 
   function setFill(color) {
-    shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, fill: color } }))
-  }
-
-  function toggleFill() {
-    if (hasFill) {
-      shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, fill: 'none' } }))
+    if (hasShape) {
+      shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, fill: color } }))
     } else {
-      const base = fillVal !== 'none' ? fillVal : '#fffbeb'
-      shapes.forEach(el => dispatch({ type: ACTIONS.UPDATE_SHAPE, payload: { ...el, fill: base } }))
+      setDefault('defaultFill', color)
     }
   }
 
   function setTextColor(color) {
-    texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, color } }))
+    if (hasText) {
+      texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, color } }))
+    } else {
+      setDefault('defaultTextColor', color)
+    }
+  }
+
+  function setFont(font) {
+    if (hasText) {
+      texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, font } }))
+    } else {
+      setDefault('defaultFont', font)
+    }
   }
 
   function setFontSize(size) {
-    texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontSize: Number(size) } }))
+    if (hasText) {
+      texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontSize: Number(size) } }))
+    } else {
+      setDefault('defaultFontSize', Number(size))
+    }
   }
 
   function toggleBold() {
-    const next = isBold ? 'normal' : 'bold'
-    texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontWeight: next } }))
+    if (hasText) {
+      const next = isBold ? 'normal' : 'bold'
+      texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontWeight: next } }))
+    } else {
+      setDefault('defaultFontWeight', isBold ? 'normal' : 'bold')
+    }
   }
 
   function toggleItalic() {
-    const next = isItalic ? 'normal' : 'italic'
-    texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontStyle: next } }))
+    if (hasText) {
+      const next = isItalic ? 'normal' : 'italic'
+      texts.forEach(el => dispatch({ type: ACTIONS.UPDATE_TEXT, payload: { ...el, fontStyle: next } }))
+    } else {
+      setDefault('defaultFontStyle', isItalic ? 'normal' : 'italic')
+    }
   }
+
+  const modeLabel = hasSelection ? null : (
+    <span className="text-xs text-stone-400 italic shrink-0">defaults</span>
+  )
 
   return (
     <div className="h-10 bg-white border-b border-stone-200 flex items-center px-3 gap-1 shrink-0 overflow-x-auto">
 
-      {/* Undo */}
+      {/* Hidden file input for Open */}
+      <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
+
+      {/* New / Open / Save */}
+      <Btn onClick={handleNew} title="New diagram">
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="1" width="9" height="13" rx="1" />
+          <path d="M8 1v4h3" />
+          <line x1="5" y1="8"  x2="10" y2="8" />
+          <line x1="5" y1="10" x2="8"  y2="10" />
+        </svg>
+      </Btn>
+
+      <Btn onClick={handleOpen} title="Open diagram">
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 4a1 1 0 0 1 1-1h4l1.5 2H14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z" />
+        </svg>
+      </Btn>
+
+      <Btn onClick={handleSave} title="Save diagram">
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M13 13H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h8l2 2v8a1 1 0 0 1-1 1z" />
+          <rect x="5" y="9" width="6" height="4" />
+          <rect x="5" y="2" width="5" height="3" />
+        </svg>
+      </Btn>
+
+      <Sep />
+
+      {/* Undo / Redo */}
       <Btn onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
         <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 7a5 5 0 1 1 .9 5.5" />
           <polyline points="1,4 3,7 6,5" />
         </svg>
-        <span>Undo</span>
       </Btn>
-
-      {/* Redo */}
       <Btn onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
         <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M13 7a5 5 0 1 0-.9 5.5" />
           <polyline points="15,4 13,7 10,5" />
         </svg>
-        <span>Redo</span>
       </Btn>
 
-      {/* --- Selection-specific controls --- */}
-      {hasAny && <Sep />}
+      <Sep />
 
-      {/* Stroke colour (shapes + arrows) */}
-      {hasStrokeable && (
-        <ColorSwatch
-          label="Stroke"
-          value={strokeVal}
-          onChange={setStroke}
-          title="Stroke colour"
-        />
+      {/* Mode label — shows "defaults" when nothing is selected */}
+      {modeLabel}
+
+      {/* Stroke colour (shapes + arrows, or default) */}
+      {(!hasSelection || hasStrokeable) && (
+        <ColorSwatch label="Stroke" value={strokeVal} onChange={setStroke} title={hasSelection ? 'Stroke colour' : 'Default stroke colour'} />
       )}
 
-      {/* Fill colour (shapes only) */}
-      {hasShape && (
-        <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Fill colour">
-          <span className="text-xs text-stone-400">Fill</span>
-          {/* Toggle button — shows a cross when no fill */}
-          <button
-            onClick={toggleFill}
-            title={hasFill ? 'Remove fill' : 'Add fill'}
-            className="w-6 h-6 rounded border border-stone-300 flex items-center justify-center hover:bg-stone-50"
-            style={{ background: hasFill ? fillVal : 'white' }}
-          >
-            {!hasFill && (
-              <svg viewBox="0 0 10 10" className="w-3 h-3 text-stone-400" stroke="currentColor" strokeWidth="1.5">
-                <line x1="1" y1="1" x2="9" y2="9" />
-                <line x1="9" y1="1" x2="1" y2="9" />
-              </svg>
-            )}
-          </button>
-          {/* Color picker only shown when fill is active */}
-          {hasFill && (
-            <span className="relative">
-              <span className="block w-6 h-6 rounded border border-stone-300" style={{ background: fillVal }} />
-              <input
-                type="color"
-                value={fillVal}
-                onChange={e => setFill(e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              />
-            </span>
-          )}
-        </label>
+      {/* Fill (shapes, or default) */}
+      {(!hasSelection || hasShape) && (
+        <FillControl value={fillVal} onChange={setFill} />
       )}
 
-      {/* Text attributes */}
-      {hasText && (
-        <>
-          {hasStrokeable && <Sep />}
+      {/* Text colour */}
+      {(!hasSelection || hasText) && (
+        <ColorSwatch label="Text" value={textColorVal} onChange={setTextColor} title={hasSelection ? 'Text colour' : 'Default text colour'} />
+      )}
 
-          {/* Text colour */}
-          <ColorSwatch
-            label="Colour"
-            value={textColorVal}
-            onChange={setTextColor}
-            title="Text colour"
-          />
+      <Sep />
 
-          <Sep />
+      {/* Font picker */}
+      {(!hasSelection || hasText) && (
+        <select
+          value={fontVal}
+          onChange={e => setFont(e.target.value)}
+          title={hasSelection ? 'Font' : 'Default font'}
+          className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 shrink-0"
+          style={{ fontFamily: `'${fontVal}', cursive`, maxWidth: 160 }}
+        >
+          {FONTS.map(f => (
+            <option key={f} value={f} style={{ fontFamily: `'${f}', cursive` }}>{f}</option>
+          ))}
+        </select>
+      )}
 
-          {/* Font size */}
-          <select
-            value={fontSizeVal}
-            onChange={e => setFontSize(e.target.value)}
-            className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600"
-            title="Font size"
-          >
-            {FONT_SIZES.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+      {/* Font size */}
+      {(!hasSelection || hasText) && (
+        <select
+          value={fontSizeVal}
+          onChange={e => setFontSize(e.target.value)}
+          title={hasSelection ? 'Font size' : 'Default font size'}
+          className="h-7 text-sm bg-stone-50 border border-stone-200 rounded px-1 text-stone-600 w-14 shrink-0"
+        >
+          {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
 
-          {/* Bold */}
-          <Btn onClick={toggleBold} active={isBold} title="Bold">
-            <span className="font-bold w-4 text-center">B</span>
-          </Btn>
+      {/* Bold */}
+      {(!hasSelection || hasText) && (
+        <Btn onClick={toggleBold} active={isBold} title={hasSelection ? 'Bold' : 'Default bold'}>
+          <span className="font-bold w-3 text-center">B</span>
+        </Btn>
+      )}
 
-          {/* Italic */}
-          <Btn onClick={toggleItalic} active={isItalic} title="Italic">
-            <span className="italic w-4 text-center">I</span>
-          </Btn>
-        </>
+      {/* Italic */}
+      {(!hasSelection || hasText) && (
+        <Btn onClick={toggleItalic} active={isItalic} title={hasSelection ? 'Italic' : 'Default italic'}>
+          <span className="italic w-3 text-center">I</span>
+        </Btn>
       )}
     </div>
   )

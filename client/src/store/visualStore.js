@@ -95,6 +95,14 @@ export const INITIAL_STYLE_STATE = {
   globalRoughness: 1.5,
   activePalette: 'default',
   activeFont: 'Caveat',
+  // Drawing defaults — applied to newly created elements
+  defaultStroke:     '#1a1a2e',
+  defaultFill:       'none',
+  defaultTextColor:  '#1a1a2e',
+  defaultFont:       'Caveat',
+  defaultFontSize:   18,
+  defaultFontWeight: 'normal',
+  defaultFontStyle:  'normal',
 }
 
 export function createInitialState() {

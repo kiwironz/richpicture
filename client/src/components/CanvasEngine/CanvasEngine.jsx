@@ -45,12 +45,23 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
   const commitText = useCallback((content) => {
     const { diagramPos } = textInput
     const parentId = findParentShape(store.elements, diagramPos.x, diagramPos.y)
+    const ss = store.styleState
     dispatch({
       type:    ACTIONS.ADD_TEXT,
-      payload: createText({ content, x: diagramPos.x, y: diagramPos.y, parentId }),
+      payload: createText({
+        content,
+        x:          diagramPos.x,
+        y:          diagramPos.y,
+        parentId,
+        color:      ss.defaultTextColor  ?? '#1a1a2e',
+        font:       ss.defaultFont       ?? 'Caveat',
+        fontSize:   ss.defaultFontSize   ?? 18,
+        fontWeight: ss.defaultFontWeight ?? 'normal',
+        fontStyle:  ss.defaultFontStyle  ?? 'normal',
+      }),
     })
     setTextInput(null)
-  }, [textInput, store.elements, dispatch])
+  }, [textInput, store.elements, store.styleState, dispatch])
 
   const cancelText = useCallback(() => setTextInput(null), [])
 
@@ -287,6 +298,8 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
           screenPos={textInput.screenPos}
           onCommit={commitText}
           onCancel={cancelText}
+          font={store.styleState.defaultFont ?? 'Caveat'}
+          fontSize={store.styleState.defaultFontSize ?? 18}
         />
       )}
 

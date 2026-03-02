@@ -33,25 +33,27 @@ function boundingRect(pts) {
 
 function buildElement(tool, points, styleState) {
   const roughness = styleState?.globalRoughness ?? 1.5
+  const stroke    = styleState?.defaultStroke   ?? '#1a1a2e'
+  const fill      = styleState?.defaultFill     ?? 'none'
 
   switch (tool) {
     case 'rectangle': {
       const r = boundingRect(points)
-      return { kind: 'shape', element: createShape({ type: 'rectangle', ...r, roughness }) }
+      return { kind: 'shape', element: createShape({ type: 'rectangle', ...r, roughness, stroke, fill }) }
     }
     case 'ellipse': {
       const r = boundingRect(points)
-      return { kind: 'shape', element: createShape({ type: 'ellipse', ...r, roughness }) }
+      return { kind: 'shape', element: createShape({ type: 'ellipse', ...r, roughness, stroke, fill }) }
     }
     case 'line':
-      return { kind: 'arrow', element: createArrow({ type: 'undirected',     startPoint: points[0], endPoint: points[points.length - 1] }) }
+      return { kind: 'arrow', element: createArrow({ type: 'undirected',    startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
     case 'arrow':
-      return { kind: 'arrow', element: createArrow({ type: 'directional',    startPoint: points[0], endPoint: points[points.length - 1] }) }
+      return { kind: 'arrow', element: createArrow({ type: 'directional',   startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
     case 'bidirectional':
-      return { kind: 'arrow', element: createArrow({ type: 'bidirectional',  startPoint: points[0], endPoint: points[points.length - 1] }) }
+      return { kind: 'arrow', element: createArrow({ type: 'bidirectional', startPoint: points[0], endPoint: points[points.length - 1], stroke }) }
     case 'freehand':
     default:
-      return { kind: 'shape', element: createShape({ type: 'freehand', points, roughness }) }
+      return { kind: 'shape', element: createShape({ type: 'freehand', points, roughness, stroke }) }
   }
 }
 
