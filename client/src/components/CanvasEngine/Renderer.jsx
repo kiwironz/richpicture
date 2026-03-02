@@ -356,6 +356,10 @@ export default function Renderer({ containerRef }) {
 
     // --- Background ---
     renderBackground(container, svg, svgNS, background)
+
+    // --- Shapes ---
+    const shapesLayer = layersRef.current['layer-shapes']
+    shapesLayer.innerHTML = ''
     shapes.forEach(el => {
       const node = drawShape(rc, svgNS, el)
       if (node) {
