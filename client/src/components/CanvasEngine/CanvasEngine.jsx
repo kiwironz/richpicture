@@ -323,7 +323,7 @@ export default function CanvasEngine({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <PropertiesBar selectedIds={selectedIds} />
+      <PropertiesBar selectedIds={selectedIds} activeTool={activeTool} />
 
       <div className="flex-1 relative overflow-hidden">
         <svg

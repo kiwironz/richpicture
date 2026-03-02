@@ -1,12 +1,14 @@
 /**
  * PropertiesBar — top toolbar: undo/redo, save/open/new, and contextual style controls.
  *
- * Two modes (automatic):
- *   Nothing selected  → edit drawing defaults (applied to newly created elements)
- *   Selection exists  → edit the selected element(s) in place
+ * Three modes (automatic):
+ *   Drawing tool active, nothing selected  → edit defaults for THAT tool only
+ *   Select/group, nothing selected         → edit all drawing defaults
+ *   Selection exists                       → edit the selected element(s) in place
  *
  * Props:
  *   selectedIds — Set of selected element ids
+ *   activeTool  — currently active tool id
  */
 
 import { useRef } from 'react'
@@ -107,7 +109,7 @@ function FillControl({ value, onChange }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function PropertiesBar({ selectedIds }) {
+export default function PropertiesBar({ selectedIds, activeTool = 'select' }) {
   const { store, dispatch, undo, redo, canUndo, canRedo } = useVisualStore()
   const fileInputRef = useRef(null)
 
@@ -153,6 +155,19 @@ export default function PropertiesBar({ selectedIds }) {
   }
 
   // --- Determine mode ---
+  // Tool-hint: what kinds of element does the active drawing tool produce?
+  const ARROW_TOOLS = ['arrow', 'line', 'bidirectional']
+  const SHAPE_TOOLS = ['rectangle', 'ellipse', 'freehand']
+  const toolIsArrow   = ARROW_TOOLS.includes(activeTool)
+  const toolIsShape   = SHAPE_TOOLS.includes(activeTool)
+  const toolIsText    = activeTool === 'text'
+  const toolIsDrawing = toolIsArrow || toolIsShape || toolIsText
+  // In defaults mode only show controls relevant to the active tool;
+  // in select/group mode show everything.
+  const toolWantsStroke = !toolIsDrawing || toolIsArrow || toolIsShape
+  const toolWantsFill   = !toolIsDrawing || ['rectangle', 'ellipse'].includes(activeTool)
+  const toolWantsText   = !toolIsDrawing || toolIsText
+
   const expandedIds = new Set(selectedIds)
   ;(store.elements.groups ?? []).forEach(g => {
     if (expandedIds.has(g.id)) g.memberIds.forEach(id => expandedIds.add(id))
@@ -291,8 +306,14 @@ export default function PropertiesBar({ selectedIds }) {
   function toggleArrowLabelBold()    { const next = arrowLabelIsBold   ? 'normal' : 'bold';   arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFontWeight: next } })) }
   function toggleArrowLabelItalic()  { const next = arrowLabelIsItalic ? 'normal' : 'italic'; arrows.forEach(a => dispatch({ type: ACTIONS.UPDATE_ARROW, payload: { ...a, labelFontStyle:  next } })) }
 
+  const TOOL_LABELS = {
+    arrow: 'Arrow', line: 'Line', bidirectional: 'Bi-arrow',
+    rectangle: 'Rectangle', ellipse: 'Ellipse', freehand: 'Freehand', text: 'Text',
+  }
   const modeLabel = hasSelection ? null : (
-    <span className="text-xs text-stone-400 italic shrink-0">defaults</span>
+    <span className="text-xs text-stone-400 italic shrink-0">
+      {TOOL_LABELS[activeTool] ? `${TOOL_LABELS[activeTool]} defaults` : 'defaults'}
+    </span>
   )
 
   return (
@@ -363,24 +384,24 @@ export default function PropertiesBar({ selectedIds }) {
       {modeLabel}
 
       {/* Stroke colour (shapes + arrows, or default) */}
-      {(!hasSelection || hasStrokeable) && (
+      {(hasStrokeable || (!hasSelection && toolWantsStroke)) && (
         <ColorSwatch label="Stroke" value={strokeVal} onChange={setStroke} title={hasSelection ? 'Stroke colour' : 'Default stroke colour'} />
       )}
 
       {/* Fill (shapes, or default) */}
-      {(!hasSelection || hasShape) && (
+      {(hasShape || (!hasSelection && toolWantsFill)) && (
         <FillControl value={fillVal} onChange={setFill} />
       )}
 
       {/* Text colour */}
-      {(!hasSelection || hasText) && (
+      {(hasText || (!hasSelection && toolWantsText)) && (
         <ColorSwatch label="Text" value={textColorVal} onChange={setTextColor} title={hasSelection ? 'Text colour' : 'Default text colour'} />
       )}
 
       <Sep />
 
       {/* Font picker */}
-      {(!hasSelection || hasText) && (
+      {(hasText || (!hasSelection && toolWantsText)) && (
         <select
           value={fontVal}
           onChange={e => setFont(e.target.value)}
@@ -395,7 +416,7 @@ export default function PropertiesBar({ selectedIds }) {
       )}
 
       {/* Font size */}
-      {(!hasSelection || hasText) && (
+      {(hasText || (!hasSelection && toolWantsText)) && (
         <select
           value={fontSizeVal}
           onChange={e => setFontSize(e.target.value)}
@@ -407,14 +428,14 @@ export default function PropertiesBar({ selectedIds }) {
       )}
 
       {/* Bold */}
-      {(!hasSelection || hasText) && (
+      {(hasText || (!hasSelection && toolWantsText)) && (
         <Btn onClick={toggleBold} active={isBold} title={hasSelection ? 'Bold' : 'Default bold'}>
           <span className="font-bold w-3 text-center">B</span>
         </Btn>
       )}
 
       {/* Italic */}
-      {(!hasSelection || hasText) && (
+      {(hasText || (!hasSelection && toolWantsText)) && (
         <Btn onClick={toggleItalic} active={isItalic} title={hasSelection ? 'Italic' : 'Default italic'}>
           <span className="italic w-3 text-center">I</span>
         </Btn>
