@@ -68,13 +68,41 @@ export function hitTestText(el, x, y) {
 }
 
 // Returns the topmost element under (x, y), checking layers top-to-bottom.
+// Freehand strokes are tested BEFORE area-fill shapes so that a freehand path
+// drawn inside a rectangle can still be directly selected.
 // Returns { kind, element } or null.
 export function hitTestAll(elements, x, y) {
   const { texts, icons, arrows, shapes } = elements
-  for (let i = texts.length - 1;  i >= 0; i--) if (hitTestText(texts[i],  x, y)) return { kind: 'text',  element: texts[i]  }
-  for (let i = icons.length - 1;  i >= 0; i--) if (hitTestShape(icons[i], x, y)) return { kind: 'icon',  element: icons[i]  }
-  for (let i = arrows.length - 1; i >= 0; i--) if (hitTestArrow(arrows[i],x, y)) return { kind: 'arrow', element: arrows[i] }
-  for (let i = shapes.length - 1; i >= 0; i--) if (hitTestShape(shapes[i],x, y)) return { kind: 'shape', element: shapes[i] }
+
+  // Top layer: texts
+  for (let i = texts.length - 1; i >= 0; i--) {
+    if (hitTestText(texts[i], x, y)) return { kind: 'text', element: texts[i] }
+  }
+
+  // Icons
+  for (let i = icons.length - 1; i >= 0; i--) {
+    if (hitTestShape(icons[i], x, y)) return { kind: 'icon', element: icons[i] }
+  }
+
+  // Arrows
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    if (hitTestArrow(arrows[i], x, y)) return { kind: 'arrow', element: arrows[i] }
+  }
+
+  // Freehand shapes — stroke-proximity test; checked before area-fill shapes
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    if (shapes[i].type === 'freehand' && hitTestFreehand(shapes[i], x, y)) {
+      return { kind: 'shape', element: shapes[i] }
+    }
+  }
+
+  // Area-fill shapes (rectangle, ellipse)
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    if (shapes[i].type !== 'freehand' && hitTestShape(shapes[i], x, y)) {
+      return { kind: 'shape', element: shapes[i] }
+    }
+  }
+
   return null
 }
 

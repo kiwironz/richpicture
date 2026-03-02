@@ -67,7 +67,7 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   // For text-tool click detection: track where pointer went down
   const textDownRef = useRef(null)
 
-  const isDrawingTool = activeTool !== 'select' && activeTool !== 'text'
+  const isDrawingTool = activeTool !== 'select' && activeTool !== 'group' && activeTool !== 'text'
 
   const todiagram = useCallback((e) => {
     const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }

@@ -54,10 +54,10 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
   const cancelText = useCallback(() => setTextInput(null), [])
 
   // ---- Group creation callback ----
-  const handleGroupCreated = useCallback((memberIds) => {
-    dispatch({ type: ACTIONS.ADD_GROUP, payload: createGroup({ memberIds }) })
-    // Note: selection of the new group happens via the G-key handler if needed
-  }, [dispatch])
+  // Uses a stable ref so the callback can access setSelectedIds even though
+  // useSelectTool is called after this definition.
+  const onGroupCreatedRef = useRef(null)
+  const stableGroupCreated = useCallback((...args) => onGroupCreatedRef.current?.(...args), [])
 
   // ---- Select / Group tool ----
   const { selectedIds, setSelectedIds, dragOffset, resizePreview, rubberBand, resizeHandles, cursor: selectCursor, selectHandlers } = useSelectTool({
@@ -65,8 +65,17 @@ export default function CanvasEngine({ activeTool = 'freehand' }) {
     screenToDiagram,
     activeTool,
     viewportScale,
-    onGroupCreated: handleGroupCreated,
+    onGroupCreated: stableGroupCreated,
   })
+
+  // Wire the real callback now that setSelectedIds is available.
+  // Plain render-time assignment (not a hook) — stableGroupCreated is the stable ref,
+  // this closure just needs to be fresh on each render to capture latest setSelectedIds.
+  onGroupCreatedRef.current = (memberIds) => {
+    const group = createGroup({ memberIds })
+    dispatch({ type: ACTIONS.ADD_GROUP, payload: group })
+    setSelectedIds(new Set([group.id]))
+  }
 
   // Clear selection when switching away from select/group tools
   useEffect(() => {
