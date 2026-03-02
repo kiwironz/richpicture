@@ -10,10 +10,11 @@
  *   line          → arrow { type: 'undirected', start, end }
  *   arrow         → arrow { type: 'directional', start, end }
  *   bidirectional → arrow { type: 'bidirectional', start, end }
- *   select        → no drawing (handled by SelectTool, Phase 1 step 9)
+ *   text          → calls onTextClick({ screenPos, diagramPos }) on a tap/click
+ *   select        → no-op (handled by useSelectTool)
  */
 
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useStrokeAccumulator } from './useStrokeAccumulator'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { createShape, createArrow, ACTIONS } from '../../store/visualStore'
@@ -42,24 +43,12 @@ function buildElement(tool, points, styleState) {
       const r = boundingRect(points)
       return { kind: 'shape', element: createShape({ type: 'ellipse', ...r, roughness }) }
     }
-    case 'line': {
-      return {
-        kind: 'arrow',
-        element: createArrow({ type: 'undirected', startPoint: points[0], endPoint: points[points.length - 1] }),
-      }
-    }
-    case 'arrow': {
-      return {
-        kind: 'arrow',
-        element: createArrow({ type: 'directional', startPoint: points[0], endPoint: points[points.length - 1] }),
-      }
-    }
-    case 'bidirectional': {
-      return {
-        kind: 'arrow',
-        element: createArrow({ type: 'bidirectional', startPoint: points[0], endPoint: points[points.length - 1] }),
-      }
-    }
+    case 'line':
+      return { kind: 'arrow', element: createArrow({ type: 'undirected',     startPoint: points[0], endPoint: points[points.length - 1] }) }
+    case 'arrow':
+      return { kind: 'arrow', element: createArrow({ type: 'directional',    startPoint: points[0], endPoint: points[points.length - 1] }) }
+    case 'bidirectional':
+      return { kind: 'arrow', element: createArrow({ type: 'bidirectional',  startPoint: points[0], endPoint: points[points.length - 1] }) }
     case 'freehand':
     default:
       return { kind: 'shape', element: createShape({ type: 'freehand', points, roughness }) }
@@ -70,13 +59,15 @@ function buildElement(tool, points, styleState) {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehand' }) {
+export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehand', onTextClick }) {
   const { dispatch, store } = useVisualStore()
   const { startStroke, addPoint, finishStroke, cancelStroke, isDrawing, stroke } =
     useStrokeAccumulator()
 
-  // Tools that draw on the canvas (select handled separately later)
-  const isDrawingTool = activeTool !== 'select'
+  // For text-tool click detection: track where pointer went down
+  const textDownRef = useRef(null)
+
+  const isDrawingTool = activeTool !== 'select' && activeTool !== 'text'
 
   const todiagram = useCallback((e) => {
     const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
@@ -84,10 +75,25 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   }, [svgRef, screenToDiagram])
 
   const onPointerDown = useCallback((e) => {
-    if (e.button !== 0 || !isDrawingTool) return
+    if (e.button !== 0) return
+
+    if (activeTool === 'text') {
+      const rect = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+      textDownRef.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        // Position relative to the canvas div (= SVG origin) for the overlay
+        screenX: e.clientX - rect.left,
+        screenY: e.clientY - rect.top,
+      }
+      return
+    }
+
+    if (!isDrawingTool) return  // select handled by useSelectTool
+
     e.currentTarget.setPointerCapture(e.pointerId)
     startStroke(todiagram(e))
-  }, [isDrawingTool, startStroke, todiagram])
+  }, [activeTool, isDrawingTool, svgRef, startStroke, todiagram])
 
   const onPointerMove = useCallback((e) => {
     if (!isDrawing) return
@@ -95,7 +101,22 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
   }, [isDrawing, addPoint, todiagram])
 
   const onPointerUp = useCallback((e) => {
-    if (e.button !== 0 || !isDrawing) return
+    if (e.button !== 0) return
+
+    // Text tool: treat as a click if pointer barely moved
+    if (activeTool === 'text') {
+      const down = textDownRef.current
+      textDownRef.current = null
+      if (!down) return
+      const dist = Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY)
+      if (dist < 8) {
+        const diagramPos = todiagram(e)
+        onTextClick?.({ screenPos: { x: down.screenX, y: down.screenY }, diagramPos })
+      }
+      return
+    }
+
+    if (!isDrawing) return
     const points = finishStroke()
     if (points.length < 2) return
 
@@ -104,9 +125,10 @@ export function useInputHandler({ svgRef, screenToDiagram, activeTool = 'freehan
       type:    kind === 'arrow' ? ACTIONS.ADD_ARROW : ACTIONS.ADD_SHAPE,
       payload: element,
     })
-  }, [isDrawing, finishStroke, activeTool, dispatch, store.styleState])
+  }, [activeTool, isDrawing, finishStroke, onTextClick, todiagram, dispatch, store.styleState])
 
   const onPointerCancel = useCallback(() => {
+    textDownRef.current = null
     cancelStroke()
   }, [cancelStroke])
 

@@ -73,8 +73,9 @@ export function createText({
   fontSize   = 18,
   rotation   = 0,         // degrees, slight random skew for hand-drawn feel
   color      = '#1a1a2e',
+  parentId   = null,      // id of a shape/icon this text is anchored to (moves with parent)
 } = {}) {
-  return { id: generateId(), kind: 'text', content, x, y, font, fontSize, rotation, color }
+  return { id: generateId(), kind: 'text', content, x, y, font, fontSize, rotation, color, parentId }
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +123,9 @@ export const ACTIONS = {
   DELETE_TEXT: 'DELETE_TEXT',
   // Style
   SET_STYLE: 'SET_STYLE',
+  // Bulk move / delete (multi-element, one undo step)
+  MOVE_ELEMENTS:   'MOVE_ELEMENTS',    // payload: { ids: string[], dx, dy }
+  DELETE_ELEMENTS: 'DELETE_ELEMENTS',  // payload: string[]  (ids; also removes attached texts)
   // Bulk
   LOAD_STORE:  'LOAD_STORE',
   CLEAR_STORE: 'CLEAR_STORE',
@@ -184,6 +188,61 @@ export function visualStoreReducer(state, action) {
     // --- style ---
     case ACTIONS.SET_STYLE:
       return { ...state, styleState: { ...state.styleState, ...action.payload } }
+
+    // --- move (multi-element, one undo step) ---
+    case ACTIONS.MOVE_ELEMENTS: {
+      const { ids, dx, dy } = action.payload
+      const idSet = new Set(ids)
+      const moveShape = el => {
+        if (!idSet.has(el.id)) return el
+        if (el.type === 'freehand') return { ...el, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) }
+        return { ...el, x: el.x + dx, y: el.y + dy }
+      }
+      const moveArrow = el => {
+        if (!idSet.has(el.id)) return el
+        return {
+          ...el,
+          startPoint: { x: el.startPoint.x + dx, y: el.startPoint.y + dy },
+          endPoint:   { x: el.endPoint.x   + dx, y: el.endPoint.y   + dy },
+          midPoints:  el.midPoints.map(p => ({ x: p.x + dx, y: p.y + dy })),
+        }
+      }
+      const moveText = el => {
+        // A text moves if its own id is selected OR its parent element is being moved.
+        // If parentId is in the moved set, the parent's move already carries it — skip own-id check.
+        if (idSet.has(el.parentId)) return { ...el, x: el.x + dx, y: el.y + dy }
+        if (idSet.has(el.id))       return { ...el, x: el.x + dx, y: el.y + dy }
+        return el
+      }
+      const moveIcon = el => {
+        if (!idSet.has(el.id)) return el
+        return { ...el, x: el.x + dx, y: el.y + dy }
+      }
+      return {
+        ...state,
+        elements: {
+          shapes: elements.shapes.map(moveShape),
+          arrows: elements.arrows.map(moveArrow),
+          texts:  elements.texts.map(moveText),
+          icons:  elements.icons.map(moveIcon),
+        },
+      }
+    }
+
+    // --- delete (multi-element; also removes child texts) ---
+    case ACTIONS.DELETE_ELEMENTS: {
+      const idSet = new Set(action.payload)
+      return {
+        ...state,
+        elements: {
+          shapes: elements.shapes.filter(el => !idSet.has(el.id)),
+          arrows: elements.arrows.filter(el => !idSet.has(el.id)),
+          icons:  elements.icons.filter(el =>  !idSet.has(el.id)),
+          // Delete a text if it is directly selected, OR if its parent is being deleted.
+          texts:  elements.texts.filter(el => !idSet.has(el.id) && !idSet.has(el.parentId)),
+        },
+      }
+    }
 
     // --- bulk ---
     case ACTIONS.LOAD_STORE:
