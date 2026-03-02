@@ -137,19 +137,14 @@ export default function CanvasEngine({
 
   const cancelText = useCallback(() => setTextInput(null), [])
 
-  // Double-click on any canvas element → edit its text/label/description
-  const handleDblClick = useCallback((e) => {
-    let node = e.target
-    let dataId = null
-    while (node && node !== svgRef.current) {
-      const id = node.getAttribute?.('data-id')
-      if (id) { dataId = id; break }
-      node = node.parentElement
-    }
-    if (!dataId) return  // empty canvas — text tool single-click handles new text
+  // ---- Double-click detection: manual tracker on pointerdown ----
+  // Browser dblclick is unreliable on SVG when Rough.js recreates nodes.
+  // Instead we track the last pointerdown's element-id + timestamp ourselves.
+  const dblClickTracker = useRef({ id: null, time: 0 })
 
+  const openEditForId = useCallback((dataId, clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect()
-    const screenPos  = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    const screenPos  = { x: clientX - rect.left, y: clientY - rect.top }
     const diagramPos = screenToDiagram(screenPos.x, screenPos.y)
 
     const textEl = (store.elements.texts  ?? []).find(t => t.id === dataId)
@@ -167,6 +162,29 @@ export default function CanvasEngine({
       setTextInput({ screenPos, diagramPos, editingId: dataId, editingKind: 'icon',  currentValue: iconEl.description ?? '' })
     }
   }, [svgRef, screenToDiagram, store.elements])
+
+  const handleDblClickPointer = useCallback((e) => {
+    if (e.button !== 0) return
+    // Walk up from the pointer target to find a data-id
+    let node = e.target
+    let dataId = null
+    while (node && node !== svgRef.current) {
+      const id = node.getAttribute?.('data-id')
+      if (id) { dataId = id; break }
+      node = node.parentElement
+    }
+
+    const now = Date.now()
+    const prev = dblClickTracker.current
+    if (dataId && prev.id === dataId && now - prev.time < 450) {
+      // Double-click confirmed — open editor
+      dblClickTracker.current = { id: null, time: 0 }
+      e.stopPropagation()
+      openEditForId(dataId, e.clientX, e.clientY)
+    } else {
+      dblClickTracker.current = { id: dataId, time: now }
+    }
+  }, [svgRef, openEditForId])
 
   // ---- Image drop & paste ----
   const placeImageFile = useCallback((file, dropPos) => {
@@ -346,6 +364,15 @@ export default function CanvasEngine({
 
   const combinedHandlers = combineHandlers(viewportPointerHandlers, drawHandlers, selectHandlers)
 
+  // Inject the manual double-click tracker into the combined pointer-down
+  const combinedWithDbl = {
+    ...combinedHandlers,
+    onPointerDown(e) {
+      handleDblClickPointer(e)
+      combinedHandlers.onPointerDown?.(e)
+    },
+  }
+
   // ---- Selection overlay geometry ----
   // Compute union bounding box of all selected elements (handles groups)
   const allElements = [
@@ -403,8 +430,7 @@ export default function CanvasEngine({
         style={{ touchAction: 'none', cursor: svgCursor }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onDoubleClick={handleDblClick}
-        {...(activeTool === 'place-icon' ? placeHandlers : combinedHandlers)}
+        {...(activeTool === 'place-icon' ? placeHandlers : combinedWithDbl)}
       >
         <g ref={viewportRef} transform={transformString}>
           {/* Renderer populates layer groups inside this group imperatively */}

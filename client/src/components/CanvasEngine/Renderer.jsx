@@ -79,7 +79,6 @@ function drawArrowLabel(svgNS, el) {
   const padX = 5, padY = 2
 
   const g = document.createElementNS(svgNS, 'g')
-  g.setAttribute('pointer-events', 'none')
   // Rotate the whole label group around the text anchor point
   g.setAttribute('transform', `rotate(${angleDeg}, ${tx}, ${ty})`)
 
@@ -102,7 +101,6 @@ function drawArrowLabel(svgNS, el) {
   t.setAttribute('font-weight',       el.labelFontWeight ?? 'normal')
   t.setAttribute('font-style',        el.labelFontStyle  ?? 'normal')
   t.setAttribute('fill',              el.labelColor      ?? '#1a1a2e')
-  t.setAttribute('pointer-events',    'none')
   t.textContent = el.label
   g.appendChild(t)
 
