@@ -11,9 +11,10 @@
  *   activeTool  — currently active tool id
  */
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useVisualStore } from '../../store/VisualStoreContext'
 import { ACTIONS } from '../../store/visualStore'
+import { buildPrompt } from '../../llm/contextBuilder'
 
 export const FONTS     = ['Caveat', 'Patrick Hand', 'Architects Daughter', 'Kalam']
 const FONT_SIZES = [10, 12, 14, 16, 18, 22, 28, 36, 48]
@@ -128,6 +129,23 @@ export default function PropertiesBar({ selectedIds, activeTool = 'select' }) {
     a.download = 'diagram.richpicture.json'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const [llmCopied, setLlmCopied] = useState(false)
+  async function handleLLMExport() {
+    const text = buildPrompt(store.elements)
+    try {
+      await navigator.clipboard.writeText(text)
+      setLlmCopied(true)
+      setTimeout(() => setLlmCopied(false), 2000)
+    } catch {
+      // Fallback: download as .txt
+      const blob = new Blob([text], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = 'richpicture-context.txt'; a.click()
+      URL.revokeObjectURL(url)
+    }
   }
 
   function handleOpen() {
@@ -344,6 +362,17 @@ export default function PropertiesBar({ selectedIds, activeTool = 'select' }) {
           <rect x="5" y="9" width="6" height="4" />
           <rect x="5" y="2" width="5" height="3" />
         </svg>
+      </Btn>
+
+      <Btn onClick={handleLLMExport} title="Copy diagram description for LLM" active={llmCopied}>
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z" />
+          <path d="M9 2V1H7v1" />
+          <line x1="6" y1="6" x2="10" y2="6" />
+          <line x1="6" y1="8" x2="10" y2="8" />
+          <line x1="6" y1="10" x2="9"  y2="10" />
+        </svg>
+        <span className="text-xs">{llmCopied ? '✓ copied' : 'LLM'}</span>
       </Btn>
 
       <Sep />
